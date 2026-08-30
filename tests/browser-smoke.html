@@ -329,9 +329,13 @@
         document.querySelector('#dayPanel [data-act="close-day"]').click();
         await new Promise(r => setTimeout(r, 100));
         log(document.getElementById('dayPanel').hidden === true && app.state.selected === null, '关闭按钮关闭详情弹层');
-        grid.querySelector('[data-date="2026-09-02"]').click();
-        await new Promise(r => setTimeout(r, 100));
-        log(document.getElementById('dayPanel').hidden === false && app.state.selected === '2026-09-02', '再次点击日期打开详情弹层');
+        const sep2 = grid.querySelector('[data-date="2026-09-02"]');
+        sep2.click();
+        await new Promise(r => setTimeout(r, 120));
+        log(document.getElementById('dayPanel').hidden === true && app.state.selected === null, '单击日期不弹出详情（需 2s 内再次点击）');
+        sep2.click();
+        await new Promise(r => setTimeout(r, 120));
+        log(document.getElementById('dayPanel').hidden === false && app.state.selected === '2026-09-02', '2s 内再次点击同一日期弹出详情');
         document.getElementById('dayPanel').click();
         await new Promise(r => setTimeout(r, 100));
         log(document.getElementById('dayPanel').hidden === true, '点击周边关闭详情弹层');

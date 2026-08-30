@@ -13,9 +13,10 @@
     state: {
       view: 'month',
       anchor: D.todayISO(),
-      selected: D.todayISO(),
+      selected: null,
       tab: 'calendar'
     },
+    lastTap: { date: null, time: 0 },
 
     refresh() {
       if (this.state.tab === 'calendar') {
@@ -28,13 +29,24 @@
     },
 
     selectDate(date, force) {
-      if (this.state.selected === date && !force) {
-        this.state.selected = null;
-      } else {
+      const now = Date.now();
+      // 明确动作（如“+N 更多”、统计跳转）：直接打开详情
+      if (force) {
+        this.lastTap = { date: null, time: 0 };
         this.state.selected = date;
         this.state.anchor = date;
+        renderCalendarArea();
+        return;
       }
-      renderCalendarArea();
+      // 普通点击：2 秒内再次点击同一日期才弹出详情
+      if (this.lastTap.date === date && now - this.lastTap.time <= 2000) {
+        this.lastTap = { date: null, time: 0 };
+        this.state.selected = date;
+        this.state.anchor = date;
+        renderCalendarArea();
+        return;
+      }
+      this.lastTap = { date: date, time: now };
     },
 
     jumpToDate(date) {
