@@ -207,6 +207,29 @@
         app.state.view = 'day';
         app.refresh();
         log(!!document.querySelector('.cal-day-timeline'), '日视图时间轴');
+        const calToolbarEl = document.querySelector('.cal-toolbar');
+        const navEl = document.querySelector('.cal-nav');
+        const vsEl = document.getElementById('viewSwitch');
+        log(getComputedStyle(calToolbarEl).flexWrap === 'nowrap', '日历工具栏单行不换行');
+        app.state.anchor = '2026-10-15';
+        app.state.view = 'week';
+        app.refresh();
+        const sameRow = () => {
+          const n = navEl.getBoundingClientRect();
+          const v = vsEl.getBoundingClientRect();
+          return Math.abs((n.top + n.height / 2) - (v.top + v.height / 2)) < 2;
+        };
+        log(sameRow(), '切到周视图月/周/日仍在同一排');
+        app.state.view = 'day';
+        app.refresh();
+        log(sameRow(), '切到日视图月/周/日仍在同一排');
+        app.state.anchor = '2026-10-01';
+        app.state.view = 'month';
+        app.refresh();
+        log(sameRow(), '10月（两位数月份）月/周/日仍在同一排');
+        app.state.anchor = '2026-08-31';
+        app.state.view = 'month';
+        app.refresh();
 
         // 事件编辑弹窗
         const editBtns = document.querySelectorAll('#dayPanel [data-act="edit-event"]');

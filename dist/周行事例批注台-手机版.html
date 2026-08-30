@@ -273,12 +273,23 @@ textarea { resize: vertical; }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
+  gap: 10px;
+  flex-wrap: nowrap;
   margin-bottom: 12px;
 }
-.cal-nav { display: flex; gap: 6px; }
-#calTitle { margin: 0; font-size: 19px; font-weight: 700; }
+.cal-nav { display: flex; gap: 6px; flex: 0 0 auto; }
+#calTitle {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 700;
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cal-toolbar .seg { flex: 0 0 auto; }
 .cal-legend { display: flex; gap: 14px; color: var(--muted); font-size: 12px; align-items: center; }
 .lg { display: inline-flex; align-items: center; gap: 5px; }
 .lg-swatch { width: 22px; height: 10px; border-radius: 3px; background: var(--accent-soft); display: inline-block; border: 1px solid var(--accent); }

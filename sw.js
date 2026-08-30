@@ -1,5 +1,5 @@
 /* 周行事例批注台 · Service Worker：离线缓存，安装后可在无网络时使用 */
-const CACHE = 'wsd-v9';
+const CACHE = 'wsd-v10';
 const ASSETS = [
   './index.html',
   './css/style.css',
