@@ -61,7 +61,7 @@
             </select>
           </label>
           <button type="button" class="btn btn-ghost btn-sm" data-c="export-csv">导出 CSV</button>
-          <button type="button" class="btn btn-ghost btn-sm" data-c="export-img">导出图片</button>
+          <button type="button" class="btn btn-ghost btn-sm" data-c="export-img" title="手机端导出后在分享面板选择「存储图像 / 保存到相册」">导出图片</button>
         </div>
       </div>
       <div class="stats-grid">
@@ -131,11 +131,29 @@
     container.querySelector('[data-c="export-img"]').addEventListener('click', () => {
       if (!charts.main) return;
       const url = charts.main.getDataURL({ pixelRatio: 2, backgroundColor: themeBg() });
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = '批注统计图_' + state.start + '_' + state.end + '.png';
-      a.click();
-      showToast('统计图已导出', 'success');
+      const blob = dataURLtoBlob(url);
+      const fileName = '批注统计图_' + state.start + '_' + state.end + '.png';
+      const file = new File([blob], fileName, { type: 'image/png' });
+
+      // 手机端：优先系统分享面板（iOS/Android 均可在面板中选择「存储图像 / 保存到相册」）
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        navigator.share({ files: [file], title: '批注统计图', text: '周行事例批注台 · 批注统计图' })
+          .then(() => showToast('已打开分享面板，选择「存储图像 / 保存到相册」即可', 'success', 4200))
+          .catch(() => { /* 用户取消分享，忽略 */ });
+        return;
+      }
+      // 手机端无分享能力：新开图片页，长按保存到相册
+      if (isMobile()) {
+        const w = window.open(url, '_blank');
+        if (w) {
+          showToast('图片已打开，长按图片选择「存储图像 / 保存图片」', 'info', 4600);
+        } else {
+          downloadPng(url, fileName);
+        }
+        return;
+      }
+      // 桌面端：直接下载
+      downloadPng(url, fileName);
     });
 
     charts.main = echarts.init(container.querySelector('[data-c="main-chart"]'), null, { renderer: 'canvas' });
@@ -358,6 +376,28 @@
     a.download = name;
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  function downloadPng(dataUrl, name) {
+    const a = document.createElement('a');
+    a.href = dataUrl;
+    a.download = name;
+    a.click();
+    showToast('统计图已导出', 'success');
+  }
+
+  function dataURLtoBlob(dataUrl) {
+    const parts = dataUrl.split(',');
+    const mime = (parts[0].match(/data:(.*?);/) || [])[1] || 'image/png';
+    const bin = atob(parts[1]);
+    const u8 = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+    return new Blob([u8], { type: mime });
+  }
+
+  function isMobile() {
+    return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+      (navigator.maxTouchPoints > 1 && window.innerWidth < 900);
   }
 
   global.WS = global.WS || {};

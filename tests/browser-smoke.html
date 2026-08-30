@@ -170,6 +170,16 @@
         document.querySelector('[data-c="preset-all"]').click();
         await new Promise(r => setTimeout(r, 150));
         log(document.querySelector('[data-c="total"]').textContent === '3', '统计「全部」区间批注总数 3（实际 ' + document.querySelector('[data-c="total"]').textContent + '）');
+        const origShare = navigator.share;
+        const origCanShare = navigator.canShare;
+        let shared = false;
+        Object.defineProperty(navigator, 'share', { value: async () => { shared = true; }, configurable: true });
+        Object.defineProperty(navigator, 'canShare', { value: () => true, configurable: true });
+        document.querySelector('[data-c="export-img"]').click();
+        await new Promise(r => setTimeout(r, 200));
+        log(shared, '手机端导出图片走系统分享（可保存到相册）');
+        Object.defineProperty(navigator, 'share', { value: origShare, configurable: true });
+        Object.defineProperty(navigator, 'canShare', { value: origCanShare, configurable: true });
         log(document.querySelectorAll('#statsArea [data-c="detail"] .stats-detail-item').length === 3, '区间批注明细列出 3 条（实际 ' + document.querySelectorAll('#statsArea [data-c="detail"] .stats-detail-item').length + '）');
         const statsStart = document.querySelector('[data-c="start"]');
         const statsEnd = document.querySelector('[data-c="end"]');
