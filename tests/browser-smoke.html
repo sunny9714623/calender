@@ -234,6 +234,17 @@
         log(cell30.textContent.includes('+1 更多'), '事件 +N 折叠按钮');
         log(cell30.textContent.includes('事件多时批注也显示'), '批注不被事件折叠隐藏');
 
+        // 批注过多折叠 + 超长文字不撑宽格子
+        for (let i = 0; i < 5; i++) store.addAnnotation({ date: '2026-08-29', content: '折叠批注' + i, tags: '', priority: '' });
+        store.addAnnotation({ date: '2026-08-29', content: '这是一段非常非常长的批注文字用于测试是否会把日历格子撑宽影响周六周日显示aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', tags: '', priority: '' });
+        app.state.anchor = '2026-08-01';
+        app.state.selected = '2026-08-29';
+        app.refresh();
+        const cell29 = grid.querySelector('[data-date="2026-08-29"]');
+        log(cell29.querySelectorAll('.cal-anno').length === 3, '批注折叠为 3 条（实际 ' + cell29.querySelectorAll('.cal-anno').length + '）');
+        log(cell29.textContent.includes('+3 更多'), '批注过多显示 +N 更多');
+        log(cell29.scrollWidth <= cell29.clientWidth + 2, '超长文字不撑宽日历格（scroll=' + cell29.scrollWidth + ' client=' + cell29.clientWidth + '）');
+
         // 导入弹窗端到端（CSV 文件 + 拖拽事件）
         document.getElementById('btnImport').click();
         await new Promise(r => setTimeout(r, 100));

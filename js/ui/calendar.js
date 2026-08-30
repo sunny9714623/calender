@@ -18,6 +18,7 @@
   const PRIORITY_ORDER = { P0: 0, P1: 1, P2: 2 };
 
   const EVENT_MAX_VISIBLE = 3;
+  const ANN_MAX_VISIBLE = 3;
 
   function sortEvents(events) {
     return events.slice().sort((a, b) => {
@@ -78,6 +79,9 @@
         const annos = annotationsOf(store, date);
         const visibleEvents = sorted.slice(0, EVENT_MAX_VISIBLE);
         const moreEvents = sorted.length - visibleEvents.length;
+        const visibleAnnos = annos.slice(0, ANN_MAX_VISIBLE);
+        const moreAnnos = annos.length - visibleAnnos.length;
+        const moreTotal = moreEvents + moreAnnos;
         const cls = [
           'cal-cell',
           inMonth ? '' : 'other-month',
@@ -94,8 +98,8 @@
             </div>
             <div class="cal-events">
               ${visibleEvents.map(e => eventChipHtml(e, date)).join('')}
-              ${moreEvents > 0 ? `<button type="button" class="cal-more" data-date="${date}">+${moreEvents} 更多</button>` : ''}
-              ${annos.map((a, idx) => annoLineHtml(a, idx + 1)).join('')}
+              ${visibleAnnos.map((a, idx) => annoLineHtml(a, idx + 1)).join('')}
+              ${moreTotal > 0 ? `<button type="button" class="cal-more" data-date="${date}">+${moreTotal} 更多</button>` : ''}
             </div>
           </div>`);
       }
