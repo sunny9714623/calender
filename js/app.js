@@ -14,7 +14,8 @@
       view: 'month',
       anchor: D.todayISO(),
       selected: null,
-      tab: 'calendar'
+      tab: 'calendar',
+      lastClicked: null
     },
     lastTap: { date: null, time: 0 },
 
@@ -33,6 +34,7 @@
       // 明确动作（如“+N 更多”、统计跳转）：直接打开详情
       if (force) {
         this.lastTap = { date: null, time: 0 };
+        this.state.lastClicked = date;
         this.state.selected = date;
         this.state.anchor = date;
         renderCalendarArea();
@@ -41,16 +43,19 @@
       // 普通点击：2 秒内再次点击同一日期才弹出详情
       if (this.lastTap.date === date && now - this.lastTap.time <= 2000) {
         this.lastTap = { date: null, time: 0 };
+        this.state.lastClicked = date;
         this.state.selected = date;
         this.state.anchor = date;
         renderCalendarArea();
         return;
       }
+      this.state.lastClicked = date;
       this.lastTap = { date: date, time: now };
     },
 
     jumpToDate(date) {
       this.state.tab = 'calendar';
+      this.state.lastClicked = date;
       this.state.selected = date;
       this.state.anchor = date;
       switchTab('calendar');
@@ -71,7 +76,7 @@
   // ---------- 主题 ----------
   function applyTheme(theme) {
     document.documentElement.dataset.theme = theme;
-    document.getElementById('btnTheme').textContent = theme === 'dark' ? '☀' : '◐';
+    document.getElementById('btnTheme').textContent = theme === 'dark' ? '☀ 白天' : '◐ 黑夜';
   }
   applyTheme(storeApi.state.settings.theme || 'light');
   document.getElementById('btnTheme').addEventListener('click', () => {
@@ -79,6 +84,157 @@
     storeApi.updateSettings({ theme: next });
     applyTheme(next);
   });
+
+  // ---------- 名称 / 头像 / 日历背景 ----------
+  function escAttr(s) {
+    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+  }
+
+  function applyBrand() {
+    const s = storeApi.state.settings;
+    const avatarEl = document.getElementById('brandAvatar');
+    const titleEl = document.getElementById('brandTitle');
+    if (avatarEl) avatarEl.innerHTML = s.avatar ? `<img src="${escAttr(s.avatar)}" alt="头像">` : '周';
+    if (titleEl) titleEl.textContent = s.appName || '周行事例批注台';
+  }
+
+  function applyCalendarBg() {
+    const s = storeApi.state.settings;
+    const grid = document.querySelector('.calendar-grid');
+    if (!grid) return;
+    grid.style.backgroundImage = s.calBgImage ? `url(${s.calBgImage})` : '';
+    grid.style.backgroundColor = s.calBgColor || '';
+    grid.classList.toggle('bg-image', !!s.calBgImage);
+  }
+
+  const BG_COLORS = [
+    '#FFFFFF', '#FDF6E3', '#E8F4FD', '#EAF7E6', '#FFF7E0', '#F3E8FF', '#FFE8E6', '#E8F0FE',
+    '#1C2126', '#14202B', '#1B2A1E', '#2B1E2A'
+  ];
+
+  function readImageFile(file, maxSize, mime, cb) {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        let w = img.width;
+        let h = img.height;
+        if (w > maxSize || h > maxSize) {
+          const ratio = Math.min(maxSize / w, maxSize / h);
+          w = Math.round(w * ratio);
+          h = Math.round(h * ratio);
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        cb(canvas.toDataURL(mime || 'image/jpeg', 0.85));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function openSettingsModal() {
+    const s = storeApi.state.settings;
+    let avatarData = s.avatar || '';
+    let bgColor = s.calBgColor || '';
+    let bgImage = s.calBgImage || '';
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+      <div class="modal settings-modal" role="dialog" aria-modal="true">
+        <h3 class="modal-title">外观与名称设置</h3>
+        <section class="settings-sec">
+          <h4>名称与头像</h4>
+          <div class="avatar-edit">
+            <span class="brand-mark" id="setAvatarPreview">${avatarData ? `<img src="${escAttr(avatarData)}" alt="头像">` : '周'}</span>
+            <div class="avatar-fields">
+              <label class="field"><span>应用名称</span><input type="text" id="setAppName" maxlength="20" value="${escAttr(s.appName || '周行事例批注台')}"></label>
+              <div class="settings-row">
+                <label class="btn btn-ghost btn-sm" for="setAvatarFile">选择头像图片</label>
+                <input type="file" id="setAvatarFile" accept="image/*" hidden>
+                <button type="button" class="btn btn-ghost btn-sm" id="setAvatarClear">移除头像</button>
+              </div>
+            </div>
+          </div>
+        </section>
+        <section class="settings-sec">
+          <h4>日历背景</h4>
+          <p class="settings-hint">选择素色或上传图片作为日历背景（图片本地保存）。</p>
+          <div class="bg-swatches" id="setBgSwatches">
+            <button type="button" class="bg-swatch none${!bgColor && !bgImage ? ' active' : ''}" data-bgcolor="" title="默认">默认</button>
+            ${BG_COLORS.map(c => `<button type="button" class="bg-swatch${bgColor === c && !bgImage ? ' active' : ''}" data-bgcolor="${c}" style="background:${c}" title="${c}"></button>`).join('')}
+          </div>
+          <div class="settings-row">
+            <label class="btn btn-ghost btn-sm" for="setBgFile">上传背景图片</label>
+            <input type="file" id="setBgFile" accept="image/*" hidden>
+            <button type="button" class="btn btn-ghost btn-sm" id="setBgClear">恢复默认背景</button>
+          </div>
+          <p class="settings-hint" id="setBgStatus">${bgImage ? '已设置自定义图片背景' : (bgColor ? '已设置素色背景' : '当前为默认背景')}</p>
+        </section>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-ghost" data-act="cancel">取消</button>
+          <button type="button" class="btn btn-primary" data-act="save">保存</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    const close = () => overlay.remove();
+    overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+    overlay.querySelector('[data-act="cancel"]').addEventListener('click', close);
+
+    const preview = overlay.querySelector('#setAvatarPreview');
+    const swatches = overlay.querySelectorAll('#setBgSwatches .bg-swatch');
+    const setSwatchActive = () => {
+      swatches.forEach(b => b.classList.toggle('active', b.dataset.bgcolor === bgColor && !bgImage));
+    };
+    overlay.querySelector('#setAvatarFile').addEventListener('change', e => {
+      const f = e.target.files && e.target.files[0];
+      if (!f) return;
+      readImageFile(f, 160, 'image/png', data => {
+        avatarData = data;
+        preview.innerHTML = `<img src="${escAttr(data)}" alt="头像">`;
+      });
+    });
+    overlay.querySelector('#setAvatarClear').addEventListener('click', () => {
+      avatarData = '';
+      preview.textContent = '周';
+    });
+    overlay.querySelector('#setBgFile').addEventListener('change', e => {
+      const f = e.target.files && e.target.files[0];
+      if (!f) return;
+      readImageFile(f, 1600, 'image/jpeg', data => {
+        bgImage = data;
+        bgColor = '';
+        setSwatchActive();
+        overlay.querySelector('#setBgStatus').textContent = '已设置自定义图片背景';
+      });
+    });
+    overlay.querySelector('#setBgClear').addEventListener('click', () => {
+      bgImage = '';
+      bgColor = '';
+      setSwatchActive();
+      overlay.querySelector('#setBgStatus').textContent = '当前为默认背景';
+    });
+    swatches.forEach(b => {
+      b.addEventListener('click', () => {
+        bgColor = b.dataset.bgcolor;
+        bgImage = '';
+        setSwatchActive();
+        overlay.querySelector('#setBgStatus').textContent = bgColor ? '已设置素色背景' : '当前为默认背景';
+      });
+    });
+    overlay.querySelector('[data-act="save"]').addEventListener('click', () => {
+      const name = String(overlay.querySelector('#setAppName').value || '').trim() || '周行事例批注台';
+      storeApi.updateSettings({ appName: name, avatar: avatarData, calBgColor: bgColor, calBgImage: bgImage });
+      applyBrand();
+      applyCalendarBg();
+      global.WS.toast.showToast('设置已保存', 'success');
+      close();
+    });
+  }
+
+  document.getElementById('btnBrandSettings').addEventListener('click', openSettingsModal);
 
   // ---------- 导航 ----------
   document.getElementById('btnPrev').addEventListener('click', () => {
@@ -238,7 +394,7 @@
 
   // ---------- 悬浮快捷按钮：添加事件 / 添加批注 ----------
   function fabDate() {
-    return app.state.selected || app.state.anchor || D.todayISO();
+    return app.state.selected || app.state.lastClicked || app.state.anchor || D.todayISO();
   }
 
   const fabEventBtn = document.getElementById('btnFabEvent');
@@ -341,5 +497,7 @@
   if (!storageUsable) {
     global.WS.toast.showToast('当前环境无法本地持久化保存，数据仅存于内存，请及时使用「备份」导出 JSON', 'error', 5200);
   }
+  applyBrand();
+  applyCalendarBg();
   renderCalendarArea();
 })(window);

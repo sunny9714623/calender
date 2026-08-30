@@ -11,24 +11,24 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="format-detection" content="telephone=no">
   <meta name="theme-color" content="#0F766E">
-  <link rel="stylesheet" href="css/style.css?v=20260831k">
+  <link rel="stylesheet" href="css/style.css?v=20260831l">
 </head>
 <body>
   <header class="topbar">
-    <div class="brand">
-      <span class="brand-mark">周</span>
+    <button type="button" class="brand" id="btnBrandSettings" title="点击修改名称 / 头像">
+      <span class="brand-mark" id="brandAvatar">周</span>
       <div class="brand-text">
-        <h1>周行事例批注台</h1>
+        <h1 id="brandTitle">周行事例批注台</h1>
         <p>导入周行事例 · 日历事件 · 按日批注 · 统计导出</p>
       </div>
-    </div>
+    </button>
     <div class="topbar-actions">
       <div class="seg tab-switch" id="tabSwitch" role="group" aria-label="页签">
         <button type="button" data-tab="calendar" class="active">日历</button>
         <button type="button" data-tab="stats">统计</button>
         <button type="button" data-tab="data">数据</button>
       </div>
-      <button id="btnTheme" class="icon-btn" type="button" title="切换主题">◐</button>
+      <button id="btnTheme" class="btn btn-ghost" type="button" title="切换白天/黑夜">◐ 黑夜</button>
     </div>
   </header>
 
@@ -102,24 +102,24 @@
     }
   </script>
 
-  <script src="vendor/xlsx.full.min.js?v=20260831k"></script>
-  <script src="vendor/papaparse.min.js?v=20260831k"></script>
-  <script src="vendor/mammoth.browser.min.js?v=20260831k"></script>
-  <script src="vendor/echarts.min.js?v=20260831k"></script>
-  <script src="js/util/dateutil.js?v=20260831k"></script>
-  <script src="js/util/aliases.js?v=20260831k"></script>
-  <script src="js/core/rowparser.js?v=20260831k"></script>
-  <script src="js/core/parser.js?v=20260831k"></script>
-  <script src="js/core/stats.js?v=20260831k"></script>
-  <script src="js/core/store.js?v=20260831k"></script>
-  <script src="js/core/filereader.js?v=20260831k"></script>
-  <script src="js/ui/toast.js?v=20260831k"></script>
-  <script src="js/ui/eventform.js?v=20260831k"></script>
-  <script src="js/ui/annoform.js?v=20260831k"></script>
-  <script src="js/ui/daypanel.js?v=20260831k"></script>
-  <script src="js/ui/calendar.js?v=20260831k"></script>
-  <script src="js/ui/importmodal.js?v=20260831k"></script>
-  <script src="js/ui/statspanel.js?v=20260831k"></script>
-  <script src="js/app.js?v=20260831k"></script>
+  <script src="vendor/xlsx.full.min.js?v=20260831l"></script>
+  <script src="vendor/papaparse.min.js?v=20260831l"></script>
+  <script src="vendor/mammoth.browser.min.js?v=20260831l"></script>
+  <script src="vendor/echarts.min.js?v=20260831l"></script>
+  <script src="js/util/dateutil.js?v=20260831l"></script>
+  <script src="js/util/aliases.js?v=20260831l"></script>
+  <script src="js/core/rowparser.js?v=20260831l"></script>
+  <script src="js/core/parser.js?v=20260831l"></script>
+  <script src="js/core/stats.js?v=20260831l"></script>
+  <script src="js/core/store.js?v=20260831l"></script>
+  <script src="js/core/filereader.js?v=20260831l"></script>
+  <script src="js/ui/toast.js?v=20260831l"></script>
+  <script src="js/ui/eventform.js?v=20260831l"></script>
+  <script src="js/ui/annoform.js?v=20260831l"></script>
+  <script src="js/ui/daypanel.js?v=20260831l"></script>
+  <script src="js/ui/calendar.js?v=20260831l"></script>
+  <script src="js/ui/importmodal.js?v=20260831l"></script>
+  <script src="js/ui/statspanel.js?v=20260831l"></script>
+  <script src="js/app.js?v=20260831l"></script>
 </body>
 </html>

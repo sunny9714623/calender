@@ -168,10 +168,9 @@ textarea { resize: vertical; }
 /* ---------- 顶栏 ---------- */
 .topbar {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
   padding: 14px 22px;
   padding-top: calc(env(safe-area-inset-top, 0px) + 14px);
   background: var(--surface);
@@ -181,7 +180,19 @@ textarea { resize: vertical; }
   z-index: 30;
   box-shadow: var(--shadow);
 }
-.brand { display: flex; align-items: center; gap: 12px; }
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  width: 100%;
+}
 .brand-mark {
   width: 42px;
   height: 42px;
@@ -194,9 +205,25 @@ textarea { resize: vertical; }
   align-items: center;
   justify-content: center;
 }
+.brand-mark img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 10px;
+  display: block;
+}
 .brand-text h1 { margin: 0; font-size: 18px; line-height: 1.2; }
 .brand-text p { margin: 2px 0 0; font-size: 12px; color: var(--muted); }
-.topbar-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  flex-wrap: nowrap;
+}
+#tabSwitch { flex: 1; display: flex; min-width: 0; }
+#tabSwitch button { flex: 1; padding: 8px 0; text-align: center; }
 
 /* ---------- 主布局 ---------- */
 .app-body {
@@ -261,6 +288,8 @@ textarea { resize: vertical; }
 
 /* ---------- 月视图 ---------- */
 .calendar-grid { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); }
+.calendar-grid { background-size: cover; background-position: center; }
+.calendar-grid.bg-image .cal-cell.other-month { background: transparent; }
 .cal-weekday-row {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
@@ -511,6 +540,22 @@ textarea { resize: vertical; }
 .panel-empty { padding: 30px 18px; text-align: center; }
 
 .event-list { display: flex; flex-direction: column; gap: 8px; }
+.swipe-wrap { position: relative; overflow: hidden; border-radius: 8px; touch-action: pan-y; }
+.swipe-del {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 84px;
+  border: none;
+  background: var(--bad);
+  color: #fff;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+}
+.swipe-wrap .event-item,
+.swipe-wrap .anno-item { transition: transform .2s ease; }
 .event-item {
   display: flex;
   align-items: flex-start;
@@ -670,6 +715,28 @@ textarea { resize: vertical; }
 @keyframes popIn { from { transform: translateY(8px) scale(.98); opacity: 0; } to { transform: none; opacity: 1; } }
 .modal-title { margin: 0 0 14px; font-size: 17px; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+
+/* ---------- 设置弹窗 ---------- */
+.settings-modal { width: 520px; }
+.settings-sec { border-top: 1px solid var(--line); padding-top: 14px; margin-top: 14px; }
+.settings-sec h4 { margin: 0 0 10px; font-size: 14px; }
+.settings-hint { margin: 6px 0 0; font-size: 12px; color: var(--muted); }
+.avatar-edit { display: flex; align-items: flex-start; gap: 14px; }
+.avatar-edit .brand-mark { width: 64px; height: 64px; font-size: 28px; border-radius: 14px; flex: 0 0 auto; }
+.avatar-fields { flex: 1; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.settings-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.bg-swatches { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+.bg-swatch {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  border: 2px solid var(--line-strong);
+  cursor: pointer;
+  padding: 0;
+  box-sizing: border-box;
+}
+.bg-swatch.none { background: var(--surface); color: var(--muted); font-size: 11px; border-style: dashed; display: inline-flex; align-items: center; justify-content: center; }
+.bg-swatch.active { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
 .confirm-title { margin: 0 0 8px; font-size: 16px; }
 .confirm-message { margin: 0; color: var(--ink-soft); }
 .confirm-modal { width: 400px; }
@@ -792,16 +859,7 @@ textarea { resize: vertical; }
     padding-top: calc(env(safe-area-inset-top, 0px) + 10px);
   }
   .brand-text p { display: none; }
-  .topbar-actions {
-    width: 100%;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    padding-bottom: 4px;
-    scrollbar-width: none;
-  }
-  .topbar-actions::-webkit-scrollbar { display: none; }
-  .topbar-actions .btn { flex: 0 0 auto; }
+  .topbar-actions { width: 100%; justify-content: space-between; }
   .app-body, .stats-area, .data-area { padding: 12px 10px 40px; }
   .app-body, .stats-area, .data-area { padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 40px); }
   .data-grid { grid-template-columns: 1fr; }

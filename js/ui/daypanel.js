@@ -9,6 +9,55 @@
   const { openEventForm, escAttr, escHtml } = global.WS.eventform;
   const ST = global.WS.stats;
 
+  /** 左滑删除：滑动露出删除按钮，点击后走既有确认删除流程 */
+  function initSwipe(listEl) {
+    if (!listEl) return;
+    let startX = null;
+    let startY = null;
+    let wrap = null;
+    const contentOf = w => w.querySelector('.event-item, .anno-item');
+    const closeAll = () => {
+      listEl.querySelectorAll('.swipe-wrap.swiped').forEach(w => {
+        w.classList.remove('swiped');
+        contentOf(w).style.transform = '';
+      });
+    };
+    listEl.addEventListener('pointerdown', e => {
+      closeAll();
+      const w = e.target.closest('.swipe-wrap');
+      if (!w || e.target.closest('.swipe-del')) return;
+      startX = e.clientX;
+      startY = e.clientY;
+      wrap = w;
+      try { w.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+    });
+    listEl.addEventListener('pointermove', e => {
+      if (!wrap || startX === null) return;
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+      if (Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy)) {
+        e.preventDefault();
+        contentOf(wrap).style.transform = 'translateX(' + Math.max(-88, Math.min(0, dx)) + 'px)';
+      }
+    });
+    const end = e => {
+      if (!wrap || startX === null) return;
+      const dx = e.clientX - startX;
+      const content = contentOf(wrap);
+      if (dx < -45) {
+        wrap.classList.add('swiped');
+        content.style.transform = 'translateX(-88px)';
+      } else {
+        wrap.classList.remove('swiped');
+        content.style.transform = '';
+      }
+      wrap = null;
+      startX = startY = null;
+    };
+    listEl.addEventListener('pointerup', end);
+    listEl.addEventListener('pointercancel', end);
+  }
+
   function renderDayPanel(container, opts) {
     const { date, store, conflictDates, onClose } = opts;
     const events = store.state.events.filter(e => e.date === date || (e.crossDay && e.endDate === date));
@@ -149,6 +198,9 @@
         });
       }
     });
+
+    initSwipe(container.querySelector('.event-list'));
+    initSwipe(container.querySelector('.anno-list'));
   }
 
   function eventItemHtml(ev, selectedDate) {
@@ -157,18 +209,21 @@
       : (escHtml(ev.startTime + '–' + ev.endTime) + (ev.crossDay && ev.endDate === selectedDate ? ' <span class="cross-tag">跨天续</span>' : ''));
     const cont = ev.crossDay && ev.date === selectedDate ? ' <span class="cross-tag">跨天</span>' : '';
     return `
-      <div class="event-item${ev.allDay ? ' is-allday' : ''}">
-        <div class="event-main">
-          <div class="event-time">${time}${cont}</div>
-          <div class="event-title">${escHtml(ev.title)}</div>
-          <div class="event-meta">
-            ${ev.location ? '<span>📍 ' + escHtml(ev.location) + '</span>' : ''}
-            ${ev.owner ? '<span>👤 ' + escHtml(ev.owner) + '</span>' : ''}
+      <div class="swipe-wrap">
+        <button type="button" class="swipe-del" data-act="del-event" data-id="${ev.id}">删除</button>
+        <div class="event-item${ev.allDay ? ' is-allday' : ''}">
+          <div class="event-main">
+            <div class="event-time">${time}${cont}</div>
+            <div class="event-title">${escHtml(ev.title)}</div>
+            <div class="event-meta">
+              ${ev.location ? '<span>📍 ' + escHtml(ev.location) + '</span>' : ''}
+              ${ev.owner ? '<span>👤 ' + escHtml(ev.owner) + '</span>' : ''}
+            </div>
           </div>
-        </div>
-        <div class="event-actions">
-          <button type="button" class="icon-btn" data-act="edit-event" data-id="${ev.id}" title="编辑">✎</button>
-          <button type="button" class="icon-btn danger" data-act="del-event" data-id="${ev.id}" title="删除">🗑</button>
+          <div class="event-actions">
+            <button type="button" class="icon-btn" data-act="edit-event" data-id="${ev.id}" title="编辑">✎</button>
+            <button type="button" class="icon-btn danger" data-act="del-event" data-id="${ev.id}" title="删除">🗑</button>
+          </div>
         </div>
       </div>`;
   }
@@ -187,16 +242,19 @@
     const tags = String(an.tags || '').split(/[,，、;；\s#]+/).filter(Boolean);
     const prio = an.priority ? '<span class="prio-tag prio-' + an.priority.toLowerCase() + '">' + an.priority + '</span>' : '';
     return `
-      <div class="anno-item">
-        <div class="anno-content">${escHtml(an.content)}</div>
-        <div class="anno-meta">
-          ${tags.map(t => '<span class="tag">#' + escHtml(t) + '</span>').join('')}
-          ${prio}
-          <span class="anno-time">${escHtml((an.createdAt || '').replace('T', ' ').slice(0, 16))}</span>
-        </div>
-        <div class="anno-actions">
-          <button type="button" class="icon-btn" data-act="edit-anno" data-id="${an.id}" title="编辑">✎</button>
-          <button type="button" class="icon-btn danger" data-act="del-anno" data-id="${an.id}" title="删除">🗑</button>
+      <div class="swipe-wrap">
+        <button type="button" class="swipe-del" data-act="del-anno" data-id="${an.id}">删除</button>
+        <div class="anno-item">
+          <div class="anno-content">${escHtml(an.content)}</div>
+          <div class="anno-meta">
+            ${tags.map(t => '<span class="tag">#' + escHtml(t) + '</span>').join('')}
+            ${prio}
+            <span class="anno-time">${escHtml((an.createdAt || '').replace('T', ' ').slice(0, 16))}</span>
+          </div>
+          <div class="anno-actions">
+            <button type="button" class="icon-btn" data-act="edit-anno" data-id="${an.id}" title="编辑">✎</button>
+            <button type="button" class="icon-btn danger" data-act="del-anno" data-id="${an.id}" title="删除">🗑</button>
+          </div>
         </div>
       </div>`;
   }

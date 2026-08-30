@@ -8,13 +8,13 @@
 <body>
   <div id="result" style="font-family:monospace;white-space:pre;padding:20px;background:#fff"></div>
   <header class="topbar">
-    <div class="brand">
-      <span class="brand-mark">周</span>
+    <button type="button" class="brand" id="btnBrandSettings" title="点击修改名称 / 头像">
+      <span class="brand-mark" id="brandAvatar">周</span>
       <div class="brand-text">
-        <h1>周行事例批注台</h1>
+        <h1 id="brandTitle">周行事例批注台</h1>
         <p>Browser Smoke Test</p>
       </div>
-    </div>
+    </button>
     <div class="topbar-actions">
       <button id="btnImport" class="btn btn-primary" type="button">⇪ 导入周行事例</button>
       <div class="seg tab-switch" id="tabSwitch" role="group" aria-label="页签">
@@ -25,7 +25,7 @@
       <button id="btnBackup" class="btn btn-ghost btn-sm" type="button">备份</button>
       <button id="btnRestore" class="btn btn-ghost btn-sm" type="button">恢复</button>
       <button id="btnClear" class="btn btn-ghost btn-sm danger-text" type="button">清空</button>
-      <button id="btnTheme" class="icon-btn" type="button" title="切换主题">◐</button>
+      <button id="btnTheme" class="btn btn-ghost" type="button" title="切换白天/黑夜">◐ 黑夜</button>
     </div>
   </header>
   <main class="app-body" id="calendarArea">
@@ -347,6 +347,60 @@
         document.getElementById('dayPanel').click();
         await new Promise(r => setTimeout(r, 100));
         log(document.getElementById('dayPanel').hidden === true, '点击周边关闭详情弹层');
+
+        // 导航铺满一整行 + 品牌可设置
+        const topbarEl = document.querySelector('.topbar');
+        const tba = document.querySelector('.topbar-actions');
+        log(getComputedStyle(topbarEl).flexDirection === 'column' && getComputedStyle(tba).justifyContent === 'space-between', '日历/统计/数据与主题切换铺满一整行');
+        log(!!document.getElementById('btnBrandSettings') && !!document.getElementById('brandTitle'), '品牌区支持点击设置');
+
+        // 悬浮按钮默认日期 = 最近点击的日期
+        const sep3 = grid.querySelector('[data-date="2026-09-03"]');
+        sep3.click();
+        await new Promise(r => setTimeout(r, 120));
+        document.getElementById('btnFabEvent').click();
+        await new Promise(r => setTimeout(r, 100));
+        const fabFormDate = document.querySelector('.event-modal [name="date"]');
+        log(!!fabFormDate && fabFormDate.value === '2026-09-03', '悬浮按钮默认使用最近点击日期（' + (fabFormDate ? fabFormDate.value : '无') + '）');
+        const fabFormCancel = document.querySelector('.event-modal [data-act="cancel"]');
+        if (fabFormCancel) fabFormCancel.click();
+
+        // 左滑删除批注 + 二次确认
+        const sep31b = grid.querySelector('[data-date="2026-08-31"]');
+        sep31b.click();
+        await new Promise(r => setTimeout(r, 100));
+        sep31b.click();
+        await new Promise(r => setTimeout(r, 120));
+        const annoWrap = Array.from(document.querySelectorAll('#dayPanel .swipe-wrap')).find(w => w.textContent.includes('FAB批注'));
+        log(!!annoWrap, '批注条目存在（可左滑）');
+        if (annoWrap) {
+          const r = annoWrap.getBoundingClientRect();
+          const y = r.top + 10;
+          annoWrap.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 1, clientX: r.right - 10, clientY: y }));
+          annoWrap.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, pointerId: 1, clientX: r.right - 90, clientY: y }));
+          annoWrap.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 1, clientX: r.right - 90, clientY: y }));
+          await new Promise(r => setTimeout(r, 100));
+          log(annoWrap.classList.contains('swiped'), '左滑露出删除按钮');
+          annoWrap.querySelector('.swipe-del').click();
+          await new Promise(r => setTimeout(r, 100));
+          log(!!document.querySelector('.confirm-modal'), '删除前二次确认');
+          const cfmOk = document.querySelector('.confirm-modal [data-act="ok"]');
+          if (cfmOk) cfmOk.click();
+          await new Promise(r => setTimeout(r, 150));
+          log(!store.state.annotations.some(a => a.content === 'FAB批注'), '左滑删除批注成功');
+        }
+
+        // 名称 / 头像 / 日历背景设置
+        document.getElementById('btnBrandSettings').click();
+        await new Promise(r => setTimeout(r, 100));
+        log(!!document.querySelector('.settings-modal'), '设置弹窗打开');
+        const setModal = document.querySelector('.settings-modal');
+        setModal.querySelector('#setAppName').value = '我的日历';
+        setModal.querySelector('.bg-swatch[data-bgcolor="#E8F4FD"]').click();
+        setModal.querySelector('[data-act="save"]').click();
+        await new Promise(r => setTimeout(r, 150));
+        log(document.getElementById('brandTitle').textContent === '我的日历', '自定义名称生效（' + document.getElementById('brandTitle').textContent + '）');
+        log(getComputedStyle(document.getElementById('calendarGrid')).backgroundColor === 'rgb(232, 244, 253)', '日历背景素色生效（' + getComputedStyle(document.getElementById('calendarGrid')).backgroundColor + '）');
       } catch (e) {
         out.push('FATAL ' + e.message + ' @ ' + (e.stack || '').split('\n')[1]);
       }

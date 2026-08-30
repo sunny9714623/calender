@@ -14,7 +14,14 @@
       events: [],
       annotations: [],
       files: [],
-      settings: { defaultDuration: 60, theme: 'light' }
+      settings: {
+        defaultDuration: 60,
+        theme: 'light',
+        appName: '周行事例批注台',
+        avatar: '',
+        calBgColor: '',
+        calBgImage: ''
+      }
     };
   }
 
