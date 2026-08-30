@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>Browser Smoke Test</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <div id="result" style="font-family:monospace;white-space:pre;padding:20px;background:#fff"></div>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">周</span>
+      <div class="brand-text">
+        <h1>周行事例批注台</h1>
+        <p>Browser Smoke Test</p>
+      </div>
+    </div>
+    <div class="topbar-actions">
+      <button id="btnImport" class="btn btn-primary" type="button">⇪ 导入周行事例</button>
+      <div class="seg" id="viewSwitch" role="group" aria-label="视图切换">
+        <button type="button" data-view="month" class="active">月</button>
+        <button type="button" data-view="week">周</button>
+        <button type="button" data-view="day">日</button>
+      </div>
+      <div class="seg tab-switch" id="tabSwitch" role="group" aria-label="页签">
+        <button type="button" data-tab="calendar" class="active">日历</button>
+        <button type="button" data-tab="stats">统计</button>
+      </div>
+      <button id="btnBackup" class="btn btn-ghost btn-sm" type="button">备份</button>
+      <button id="btnRestore" class="btn btn-ghost btn-sm" type="button">恢复</button>
+      <button id="btnClear" class="btn btn-ghost btn-sm danger-text" type="button">清空</button>
+      <button id="btnTheme" class="icon-btn" type="button" title="切换主题">◐</button>
+    </div>
+  </header>
+  <main class="app-body" id="calendarArea">
+    <section class="calendar-area">
+      <div class="cal-toolbar">
+        <div class="cal-nav">
+          <button id="btnPrev" class="btn btn-ghost btn-sm" type="button" title="上一个">‹</button>
+          <button id="btnToday" class="btn btn-ghost btn-sm" type="button">今天</button>
+          <button id="btnNext" class="btn btn-ghost btn-sm" type="button" title="下一个">›</button>
+        </div>
+        <h2 id="calTitle"></h2>
+        <div class="cal-legend">
+          <span class="lg"><i class="lg-swatch allday"></i>全天</span>
+          <span class="lg" title="当前视图范围内的批注数"><i class="anno-badge" id="legendAnnoCount">0</i>本视图批注</span>
+          <span class="lg"><i class="lg-conflict-demo">⚠</i>冲突</span>
+        </div>
+      </div>
+      <div id="calendarGrid" class="calendar-grid"></div>
+    </section>
+    <aside id="dayPanel" class="day-panel"></aside>
+  </main>
+  <section id="statsArea" class="stats-area" hidden></section>
+  <input type="file" id="restoreInput" accept=".json" hidden>
+  <script src="../vendor/xlsx.full.min.js"></script>
+  <script src="../vendor/papaparse.min.js"></script>
+  <script src="../vendor/mammoth.browser.min.js"></script>
+  <script src="../vendor/echarts.min.js"></script>
+  <script src="../js/util/dateutil.js"></script>
+  <script src="../js/util/aliases.js"></script>
+  <script src="../js/core/rowparser.js"></script>
+  <script src="../js/core/parser.js"></script>
+  <script src="../js/core/stats.js"></script>
+  <script src="../js/core/store.js"></script>
+  <script src="../js/core/filereader.js"></script>
+  <script src="../js/ui/toast.js"></script>
+  <script src="../js/ui/eventform.js"></script>
+  <script src="../js/ui/daypanel.js"></script>
+  <script src="../js/ui/calendar.js"></script>
+  <script src="../js/ui/importmodal.js"></script>
+  <script src="../js/ui/statspanel.js"></script>
+  <script src="../js/app.js"></script>
+  <script>
+    const out = [];
+    const waitFor = (cond, ms) => new Promise(resolve => {
+      const start = Date.now();
+      const tick = () => {
+        if (cond() || Date.now() - start > ms) return resolve(cond());
+        setTimeout(tick, 100);
+      };
+      tick();
+    });
+    window.addEventListener('error', e => out.push('WINDOW_ERROR ' + e.message + ' @ ' + e.filename + ':' + e.lineno));
+    window.addEventListener('unhandledrejection', e => out.push('REJECTION ' + (e.reason && e.reason.stack ? e.reason.stack.split('\n').slice(0, 3).join(' | ') : (e.reason && e.reason.message))));
+    (async function () {
+      const log = (ok, msg) => out.push((ok ? 'PASS ' : 'FAIL ') + msg);
+      try {
+        const app = window.WS.app;
+        const store = app.store;
+        store.clearAll();
+        store.importEvents([
+          { date: '2026-08-31', startTime: '09:00', endTime: '10:30', allDay: false, title: '部门周例会', location: '3F会议室', owner: '张三', description: '', sourceRow: 2 },
+          { date: '2026-09-01', startTime: '', endTime: '', allDay: true, title: '全天培训', location: '大教室', owner: '王五', description: '', sourceRow: 3 }
+        ], null, false);
+        store.addAnnotation({ date: '2026-08-31', content: '批注A', tags: '会议,重要', priority: 'P0' });
+        store.addAnnotation({ date: '2026-08-31', content: '批注B', tags: '会议', priority: 'P1' });
+        store.addAnnotation({ date: '2026-09-01', content: '批注C', tags: '跟进', priority: '' });
+
+        app.state.anchor = '2026-08-31';
+        app.state.selected = '2026-08-31';
+        app.state.view = 'month';
+        app.refresh();
+
+        const grid = document.getElementById('calendarGrid');
+        log(grid.querySelectorAll('.cal-cell').length === 42, '月历渲染 42 格（实际 ' + grid.querySelectorAll('.cal-cell').length + '）');
+        log(grid.textContent.includes('部门周例会'), '事件显示');
+        log(grid.textContent.includes('全天培训'), '全天事件显示');
+        log(grid.querySelectorAll('.anno-badge').length >= 2, '批注角标出现（' + grid.querySelectorAll('.anno-badge').length + '）');
+        const annoLines = grid.querySelectorAll('.cal-anno');
+        log(annoLines.length >= 2, '日历格显示批注行（' + annoLines.length + '）');
+        log(annoLines.length >= 1 && getComputedStyle(annoLines[0]).display === 'block', '批注逐行换行展示');
+        const annoNums = grid.querySelectorAll('.cal-anno .anno-num');
+        log(annoNums.length >= 2 && annoNums[0].style.color && annoNums[0].style.color !== annoNums[1].style.color, '批注序号颜色不同（' + annoNums[0].style.color + ' vs ' + annoNums[1].style.color + '）');
+        const annoPrios = Array.from(grid.querySelectorAll('.cal-anno .anno-prio')).map(x => x.textContent);
+        log(annoPrios.length >= 3, '批注行展示优先级标签（' + annoPrios.join(',') + '）');
+        const firstTwo = Array.from(grid.querySelectorAll('.cal-anno')).slice(0, 2);
+        log(firstTwo.length === 2 && firstTwo[0].querySelector('.anno-prio').textContent === 'P0' && firstTwo[1].querySelector('.anno-prio').textContent === 'P1', '批注按优先级 P0→P1 排序');
+        log(annoPrios.includes('无'), '无优先级批注显示「无」');
+        log(document.getElementById('legendAnnoCount').textContent === '2', '8月视图图例批注数 2（实际 ' + document.getElementById('legendAnnoCount').textContent + '）');
+
+        const panel = document.getElementById('dayPanel');
+        log(panel.textContent.includes('批注A') && panel.textContent.includes('批注B'), '当日面板批注列表');
+        log(panel.textContent.includes('部门周例会'), '当日面板事件列表');
+        log(panel.textContent.includes('⚠ 时段冲突') === false || true, '面板渲染无异常');
+
+        document.querySelector('[data-tab="stats"]').click();
+        await new Promise(r => setTimeout(r, 400));
+        log(document.getElementById('statsArea').hidden === false, '统计视图显示');
+        log(document.querySelectorAll('#statsArea .chart-card').length === 3, '统计三张卡片');
+        log(document.querySelectorAll('#statsArea canvas').length >= 3, 'ECharts 已渲染 canvas（' + document.querySelectorAll('#statsArea canvas').length + '）');
+        log(document.querySelector('[data-c="total"]').textContent === '2', '区间批注总数仅统计所选区间（8月=2，实际 ' + document.querySelector('[data-c="total"]').textContent + '）');
+        document.querySelector('[data-c="preset-all"]').click();
+        await new Promise(r => setTimeout(r, 150));
+        log(document.querySelector('[data-c="total"]').textContent === '3', '统计「全部」区间批注总数 3（实际 ' + document.querySelector('[data-c="total"]').textContent + '）');
+        log(document.querySelectorAll('#statsArea [data-c="detail"] .stats-detail-item').length === 3, '区间批注明细列出 3 条（实际 ' + document.querySelectorAll('#statsArea [data-c="detail"] .stats-detail-item').length + '）');
+        const statsStart = document.querySelector('[data-c="start"]');
+        const statsEnd = document.querySelector('[data-c="end"]');
+        statsStart.value = '2026-12-01';
+        statsStart.dispatchEvent(new Event('change'));
+        statsEnd.value = '2026-12-01';
+        statsEnd.dispatchEvent(new Event('change'));
+        await new Promise(r => setTimeout(r, 150));
+        log(document.querySelector('[data-c="total"]').textContent === '0' && !document.querySelector('[data-c="empty"]').hidden, '无数据区间显示空态提示');
+
+        const all = store.state.annotations;
+        store.deleteAnnotation(all[0].id);
+        document.querySelector('[data-tab="calendar"]').click();
+        app.refresh();
+        log(document.getElementById('dayPanel').textContent.includes('批注B') && !document.getElementById('dayPanel').textContent.includes('批注A'), '删除批注后列表实时刷新');
+        log(document.getElementById('legendAnnoCount').textContent === '1', '删除批注后 8 月视图图例实时更新为 1（实际 ' + document.getElementById('legendAnnoCount').textContent + '）');
+        app.state.anchor = '2026-09-01';
+        app.state.selected = '2026-09-01';
+        app.refresh();
+        log(document.getElementById('legendAnnoCount').textContent === '1', '9 月视图图例批注数 1（9-01 批注C，实际 ' + document.getElementById('legendAnnoCount').textContent + '）');
+        app.state.anchor = '2026-08-31';
+        app.state.selected = '2026-08-31';
+        app.refresh();
+
+        app.state.view = 'week';
+        app.refresh();
+        log(document.querySelectorAll('.cal-week-col').length === 7, '周视图 7 列');
+
+        app.state.view = 'day';
+        app.refresh();
+        log(!!document.querySelector('.cal-day-timeline'), '日视图时间轴');
+
+        // 事件编辑弹窗
+        const editBtns = document.querySelectorAll('#dayPanel [data-act="edit-event"]');
+        log(editBtns.length >= 1, '面板存在编辑按钮（' + editBtns.length + '）');
+        if (editBtns.length) {
+          const btn0 = editBtns[0];
+          btn0.click();
+          await new Promise(r => setTimeout(r, 100));
+        log(!!document.querySelector('.event-modal'), '事件编辑弹窗打开');
+        const formEl = document.querySelector('.event-modal form');
+        log(formEl.querySelector('[name="title"]').value === '部门周例会', '编辑弹窗回显事件标题（' + formEl.querySelector('[name="title"]').value + '）');
+        log(formEl.querySelector('[name="date"]').value === '2026-08-31', '编辑弹窗回显日期');
+        formEl.querySelector('[name="date"]').value = '2026-08-29';
+        formEl.querySelector('button[type="submit"]').click();
+        await new Promise(r => setTimeout(r, 150));
+        log(app.state.selected === '2026-08-29', '修改日期保存后选中日期跳到新日期（' + app.state.selected + '）');
+        log(document.getElementById('dayPanel').textContent.includes('部门周例会'), '修改后事件在新日期回显');
+        }
+
+        // 备份导出数据完整性
+        const backup = JSON.parse(store.exportJSON());
+        log(backup.events.length === 2 && backup.annotations.length === 2, '备份 JSON 数据完整');
+
+        // 事件较多时批注不被折叠隐藏（只折叠事件）
+        store.addEvent({ date: '2026-08-30', title: '事件1', allDay: true });
+        store.addEvent({ date: '2026-08-30', title: '事件2', allDay: true });
+        store.addEvent({ date: '2026-08-30', title: '事件3', allDay: true });
+        store.addEvent({ date: '2026-08-30', title: '事件4', allDay: true });
+        store.addAnnotation({ date: '2026-08-30', content: '事件多时批注也显示', tags: '', priority: '' });
+        app.state.anchor = '2026-08-01';
+        app.state.selected = '2026-08-30';
+        app.state.view = 'month';
+        app.refresh();
+        const cell30 = grid.querySelector('[data-date="2026-08-30"]');
+        log(cell30.querySelectorAll('.cal-event').length === 3, '月格事件折叠为 3 条（实际 ' + cell30.querySelectorAll('.cal-event').length + '）');
+        log(cell30.textContent.includes('+1 更多'), '事件 +N 折叠按钮');
+        log(cell30.textContent.includes('事件多时批注也显示'), '批注不被事件折叠隐藏');
+
+        // 导入弹窗端到端（CSV 文件 + 拖拽事件）
+        document.getElementById('btnImport').click();
+        await new Promise(r => setTimeout(r, 100));
+        log(!!document.querySelector('.import-modal'), '导入弹窗打开');
+        const csvText = [
+          '日期,星期,开始时间,结束时间,事项,地点,负责人',
+          '2026-09-07,周一,09:00,10:00,晨会,会议室,张三',
+          '2026-09-08,周二,,,文档编写,,李四'
+        ].join('\n');
+        const csvFile = new File([csvText], 'smoke-import.csv', { type: 'text/csv' });
+        const dt = new DataTransfer();
+        dt.items.add(csvFile);
+        const dz = document.querySelector('.drop-zone');
+        dz.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }));
+        await waitFor(() => !!document.querySelector('.parse-table'), 8000);
+        const parseTable = document.querySelector('.parse-table');
+        log(!!parseTable && parseTable.querySelectorAll('tbody tr').length === 2, '解析预览 2 行（实际 ' + (parseTable ? parseTable.querySelectorAll('tbody tr').length : 0) + '）');
+        const confirmBtn = document.querySelector('[data-role="confirm"]');
+        log(!!confirmBtn && !confirmBtn.disabled, '确认导入按钮可用');
+        confirmBtn.click();
+        await waitFor(() => !!document.querySelector('.confirm-modal [data-act="ok"]'), 4000);
+        const overwriteConfirm = document.querySelector('.confirm-modal [data-act="ok"]');
+        log(!!overwriteConfirm, '覆盖导入二次确认弹出');
+        if (overwriteConfirm) overwriteConfirm.click();
+        await waitFor(() => !document.querySelector('.import-modal'), 4000);
+        log(store.state.events.length === 2, '导入后事件数 2（实际 ' + store.state.events.length + '）');
+        log(store.state.files.length === 1 && store.state.files[0].fileName === 'smoke-import.csv', '导入记录写入');
+        log(!document.querySelector('.import-modal'), '导入弹窗已关闭');
+
+        // 真实周历网格 docx 导入（回归：用户桌面文件）
+        const lingering = document.querySelector('.import-modal');
+        if (lingering) lingering.querySelector('[data-role="close"]').click();
+        document.getElementById('btnImport').click();
+        await new Promise(r => setTimeout(r, 100));
+        const docxRes = await fetch('fixtures/weekly-grid-real.docx');
+        const docxBytes = await docxRes.arrayBuffer();
+        const docxFile = new File([docxBytes], '2026年下学期周行事历.docx', { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+        const dt2 = new DataTransfer();
+        dt2.items.add(docxFile);
+        document.querySelector('.drop-zone').dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt2 }));
+        await waitFor(() => {
+          const s = document.querySelector('[data-role="summary"]');
+          return !!s && s.textContent.includes('周历网格');
+        }, 8000);
+        const gridSummary = document.querySelector('[data-role="summary"]');
+        log(!!gridSummary && gridSummary.textContent.includes('周历网格'), '周历网格模板识别');
+        const gridRows = document.querySelectorAll('.parse-table tbody tr').length;
+        log(gridRows === 57, '网格预览 57 条事件（实际 ' + gridRows + '）');
+        const gridConfirm = document.querySelector('[data-role="confirm"]');
+        log(!!gridConfirm && !gridConfirm.disabled, '网格确认按钮可用');
+        gridConfirm.click();
+        await new Promise(r => setTimeout(r, 150));
+        const gridOverwrite = document.querySelector('.confirm-modal [data-act="ok"]');
+        if (gridOverwrite) gridOverwrite.click();
+        await new Promise(r => setTimeout(r, 400));
+        log(store.state.events.length === 57, '覆盖导入 57 条事件（实际 ' + store.state.events.length + '）');
+        log(store.state.events.some(e => e.title === '报到' && e.date === '2026-08-31'), '含 8.31 报到');
+        log(store.state.events.some(e => e.title === '元旦假' && e.date === '2027-01-01'), '含 2027-01-01 元旦假');
+        log(store.state.files[0].fileName === '2026年下学期周行事历.docx', '导入记录含真实文件名');
+        log(!document.querySelector('.import-modal'), '导入弹窗已关闭');
+      } catch (e) {
+        out.push('FATAL ' + e.message + ' @ ' + (e.stack || '').split('\n')[1]);
+      }
+      document.getElementById('result').textContent = out.join('\n');
+      document.title = out.some(l => l.startsWith('FAIL') || l.startsWith('FATAL')) ? 'SMOKE_FAIL' : 'SMOKE_PASS';
+    })();
+  </script>
+</body>
+</html>

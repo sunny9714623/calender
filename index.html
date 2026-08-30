@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>周行事例批注台</title>
+  <link rel="icon" href="data:,">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <meta name="theme-color" content="#0F766E">
+  <link rel="stylesheet" href="css/style.css?v=20260831d">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">周</span>
+      <div class="brand-text">
+        <h1>周行事例批注台</h1>
+        <p>导入周行事例 · 日历事件 · 按日批注 · 统计导出</p>
+      </div>
+    </div>
+    <div class="topbar-actions">
+      <button id="btnImport" class="btn btn-primary" type="button">⇪ 导入周行事例</button>
+      <div class="seg" id="viewSwitch" role="group" aria-label="视图切换">
+        <button type="button" data-view="month" class="active">月</button>
+        <button type="button" data-view="week">周</button>
+        <button type="button" data-view="day">日</button>
+      </div>
+      <div class="seg tab-switch" id="tabSwitch" role="group" aria-label="页签">
+        <button type="button" data-tab="calendar" class="active">日历</button>
+        <button type="button" data-tab="stats">统计</button>
+      </div>
+      <button id="btnBackup" class="btn btn-ghost btn-sm" type="button">备份</button>
+      <button id="btnRestore" class="btn btn-ghost btn-sm" type="button">恢复</button>
+      <button id="btnClear" class="btn btn-ghost btn-sm danger-text" type="button">清空</button>
+      <button id="btnTheme" class="icon-btn" type="button" title="切换主题">◐</button>
+    </div>
+  </header>
+
+  <main class="app-body" id="calendarArea">
+    <section class="calendar-area">
+      <div class="cal-toolbar">
+        <div class="cal-nav">
+          <button id="btnPrev" class="btn btn-ghost btn-sm" type="button" title="上一个">‹</button>
+          <button id="btnToday" class="btn btn-ghost btn-sm" type="button">今天</button>
+          <button id="btnNext" class="btn btn-ghost btn-sm" type="button" title="下一个">›</button>
+        </div>
+        <h2 id="calTitle"></h2>
+        <div class="cal-legend">
+          <span class="lg"><i class="lg-swatch allday"></i>全天</span>
+          <span class="lg" title="当前视图范围内的批注数"><i class="anno-badge" id="legendAnnoCount">0</i>本视图批注</span>
+          <span class="lg"><i class="lg-conflict-demo">⚠</i>冲突</span>
+        </div>
+      </div>
+      <div id="calendarGrid" class="calendar-grid"></div>
+    </section>
+    <aside id="dayPanel" class="day-panel"></aside>
+  </main>
+
+  <section id="statsArea" class="stats-area" hidden></section>
+
+  <input type="file" id="restoreInput" accept=".json" hidden>
+
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').catch(() => {});
+      });
+    }
+  </script>
+
+  <script src="vendor/xlsx.full.min.js?v=20260831d"></script>
+  <script src="vendor/papaparse.min.js?v=20260831d"></script>
+  <script src="vendor/mammoth.browser.min.js?v=20260831d"></script>
+  <script src="vendor/echarts.min.js?v=20260831d"></script>
+  <script src="js/util/dateutil.js?v=20260831d"></script>
+  <script src="js/util/aliases.js?v=20260831d"></script>
+  <script src="js/core/rowparser.js?v=20260831d"></script>
+  <script src="js/core/parser.js?v=20260831d"></script>
+  <script src="js/core/stats.js?v=20260831d"></script>
+  <script src="js/core/store.js?v=20260831d"></script>
+  <script src="js/core/filereader.js?v=20260831d"></script>
+  <script src="js/ui/toast.js?v=20260831d"></script>
+  <script src="js/ui/eventform.js?v=20260831d"></script>
+  <script src="js/ui/daypanel.js?v=20260831d"></script>
+  <script src="js/ui/calendar.js?v=20260831d"></script>
+  <script src="js/ui/importmodal.js?v=20260831d"></script>
+  <script src="js/ui/statspanel.js?v=20260831d"></script>
+  <script src="js/app.js?v=20260831d"></script>
+</body>
+</html>

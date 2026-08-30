@@ -1,0 +1,12 @@
+# IDE
+.idea/
+*.iml
+
+# 隐私：本地测试夹具含个人周行事历文件，不推送到 GitHub
+tests/fixtures/
+
+# 系统与临时文件
+.DS_Store
+Thumbs.db
+*.log
+shot-*.png
