@@ -2,9 +2,12 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>周行事例批注台（手机离线版）</title>
   <link rel="icon" href="data:,">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="format-detection" content="telephone=no">
   <style>
 /* ============ 周行事例批注台 样式 ============ */
 :root {
@@ -48,7 +51,11 @@
 }
 
 * { box-sizing: border-box; }
-html { scroll-behavior: smooth; }
+html {
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
 body {
   margin: 0;
   background: var(--bg);
@@ -57,6 +64,7 @@ body {
   font-size: 14.5px;
   line-height: 1.65;
   font-variant-numeric: tabular-nums;
+  -webkit-tap-highlight-color: transparent;
 }
 button { font: inherit; }
 input, select, textarea {
@@ -144,6 +152,7 @@ textarea { resize: vertical; }
   gap: 16px;
   flex-wrap: wrap;
   padding: 14px 22px;
+  padding-top: calc(env(safe-area-inset-top, 0px) + 14px);
   background: var(--surface);
   border-bottom: 1px solid var(--line);
   position: sticky;
@@ -553,7 +562,7 @@ textarea { resize: vertical; }
   align-items: center;
   justify-content: center;
   z-index: 100;
-  padding: 20px;
+  padding: max(20px, env(safe-area-inset-top, 0px)) 20px max(20px, env(safe-area-inset-bottom, 0px));
   animation: fadeIn .15s ease;
 }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
@@ -683,9 +692,24 @@ textarea { resize: vertical; }
   .card-main { grid-row: auto; }
 }
 @media (max-width: 720px) {
-  .topbar { padding: 10px 14px; }
+  .topbar {
+    padding: 10px 12px;
+    padding-top: calc(env(safe-area-inset-top, 0px) + 10px);
+  }
   .brand-text p { display: none; }
+  .topbar-actions {
+    width: 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+  }
+  .topbar-actions::-webkit-scrollbar { display: none; }
+  .topbar-actions .btn { flex: 0 0 auto; }
   .app-body, .stats-area { padding: 12px 10px 40px; }
+  .app-body, .stats-area { padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 40px); }
+  input, select, textarea { font-size: 16px; }
   .cal-cell { min-height: 74px; padding: 4px 5px; }
   .cal-event { font-size: 10px; }
   .cal-week-grid { min-height: 420px; }
