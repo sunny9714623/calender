@@ -218,5 +218,17 @@ eq(s2.state.annotations.length, 0, '删除后批注归零');
 eq(ST.periodTotals(s2.state.annotations, '2026-08-01', '2026-08-31', 'month').find(m => m.key === '2026-08').count, 0, '删除后 8 月统计归零');
 eq(ST.countByDate(s2.state.annotations).size, 0, '删除后计数映射为空');
 
+console.log('== stats: 批注优先级排序 ==');
+const prioSort = ST.sortByPriority([
+  { date: '2026-09-02', priority: '', createdAt: '2026-09-02T10:00:00Z' },
+  { date: '2026-09-02', priority: 'P2', createdAt: '2026-09-02T09:00:00Z' },
+  { date: '2026-09-02', priority: 'P0', createdAt: '2026-09-02T11:00:00Z' },
+  { date: '2026-09-02', priority: 'P1', createdAt: '2026-09-02T08:00:00Z' },
+  { date: '2026-09-02', priority: 'P0', createdAt: '2026-09-02T07:00:00Z' }
+]);
+eq(prioSort.map(a => a.priority || '无'), ['P0', 'P0', 'P1', 'P2', '无'], '按优先级 P0→P1→P2→无 排序');
+eq(prioSort[0].createdAt, '2026-09-02T07:00:00Z', '同优先级按创建时间升序（第一条）');
+eq(prioSort[1].createdAt, '2026-09-02T11:00:00Z', '同优先级按创建时间升序（第二条）');
+
 console.log('\n结果: ' + passed + ' 通过, ' + failed + ' 失败');
 process.exit(failed ? 1 : 0);

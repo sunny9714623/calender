@@ -50,8 +50,8 @@
       </div>
       <div id="calendarGrid" class="calendar-grid"></div>
     </section>
-    <aside id="dayPanel" class="day-panel"></aside>
   </main>
+  <div id="dayPanel" class="day-overlay" hidden></div>
   <section id="statsArea" class="stats-area" hidden></section>
   <section id="dataArea" class="data-area" hidden>
     <div class="data-head"><h2>数据管理</h2></div>
@@ -142,9 +142,12 @@
         log(document.getElementById('legendAnnoCount').textContent === '2', '8月视图图例批注数 2（实际 ' + document.getElementById('legendAnnoCount').textContent + '）');
 
         const panel = document.getElementById('dayPanel');
+        log(panel.hidden === false, '点击日期弹出当日详情弹层');
         log(panel.textContent.includes('批注A') && panel.textContent.includes('批注B'), '当日面板批注列表');
         log(panel.textContent.includes('部门周例会'), '当日面板事件列表');
         log(panel.textContent.includes('⚠ 时段冲突') === false || true, '面板渲染无异常');
+        const panelAnnoItems = panel.querySelectorAll('.anno-item');
+        log(panelAnnoItems.length >= 2 && panelAnnoItems[0].textContent.includes('批注A') && panelAnnoItems[1].textContent.includes('批注B'), '当日批注按优先级排序（P0 批注A 在前）');
 
         document.querySelector('[data-tab="stats"]').click();
         await new Promise(r => setTimeout(r, 400));
@@ -321,6 +324,17 @@
         log(!!document.querySelector('.event-modal'), '悬浮按钮打开事件弹窗');
         const fabEventCancel = document.querySelector('.event-modal [data-act="cancel"]');
         if (fabEventCancel) fabEventCancel.click();
+
+        // 详情弹层关闭：右上角按钮 / 点击周边
+        document.querySelector('#dayPanel [data-act="close-day"]').click();
+        await new Promise(r => setTimeout(r, 100));
+        log(document.getElementById('dayPanel').hidden === true && app.state.selected === null, '关闭按钮关闭详情弹层');
+        grid.querySelector('[data-date="2026-09-02"]').click();
+        await new Promise(r => setTimeout(r, 100));
+        log(document.getElementById('dayPanel').hidden === false && app.state.selected === '2026-09-02', '再次点击日期打开详情弹层');
+        document.getElementById('dayPanel').click();
+        await new Promise(r => setTimeout(r, 100));
+        log(document.getElementById('dayPanel').hidden === true, '点击周边关闭详情弹层');
       } catch (e) {
         out.push('FATAL ' + e.message + ' @ ' + (e.stack || '').split('\n')[1]);
       }

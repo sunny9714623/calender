@@ -7,49 +7,63 @@
   const D = global.WS.dateutil;
   const { showToast, confirmDialog } = global.WS.toast;
   const { openEventForm, escAttr, escHtml } = global.WS.eventform;
+  const ST = global.WS.stats;
 
   function renderDayPanel(container, opts) {
-    const { date, store, conflictDates } = opts;
+    const { date, store, conflictDates, onClose } = opts;
     const events = store.state.events.filter(e => e.date === date || (e.crossDay && e.endDate === date));
-    const annotations = store.state.annotations.filter(a => a.date === date);
+    const annotations = ST.sortByPriority(store.state.annotations.filter(a => a.date === date));
     const hasConflict = conflictDates.has(date);
 
     container.innerHTML = `
-      <div class="day-head">
-        <h2>当日面板</h2>
-        <p class="day-date">${escHtml(D.formatTitle(date))}</p>
-      </div>
-      <section class="panel-sec">
-        <div class="sec-head">
-          <h3>今日事件 <span class="count-pill">${events.length}</span></h3>
-          ${hasConflict ? '<span class="conflict-tag" title="存在时间重叠的事件">⚠ 时段冲突</span>' : ''}
-          <button type="button" class="btn btn-ghost btn-sm" data-act="add-event">+ 添加</button>
-        </div>
-        <div class="event-list">
-          ${events.length ? events.map(e => eventItemHtml(e, date)).join('') : '<p class="empty-hint">该日暂无事件</p>'}
-        </div>
-      </section>
-      <section class="panel-sec">
-        <div class="sec-head">
-          <h3>批注 <span class="count-pill">${annotations.length}</span></h3>
-        </div>
-        <form class="anno-form" data-act="anno-add">
-          <textarea name="content" rows="2" required maxlength="500" placeholder="记录今天的情况 / 临时补充…（必填）"></textarea>
-          <div class="anno-form-row">
-            <input type="text" name="tags" placeholder="标签，逗号分隔（可选）" maxlength="60">
-            <select name="priority">
-              <option value="">优先级</option>
-              <option value="P0">P0</option>
-              <option value="P1">P1</option>
-              <option value="P2">P2</option>
-            </select>
-            <button type="submit" class="btn btn-primary btn-sm">添加</button>
+      <div class="day-panel">
+        <div class="day-head">
+          <div>
+            <h2>当日详情</h2>
+            <p class="day-date">${escHtml(D.formatTitle(date))}</p>
           </div>
-        </form>
-        <div class="anno-list">
-          ${annotations.length ? annotations.map(a => annoItemHtml(a)).join('') : '<p class="empty-hint">暂无批注，添加一条吧</p>'}
+          <button type="button" class="icon-btn day-close" data-act="close-day" title="关闭">✕</button>
         </div>
-      </section>`;
+        <section class="panel-sec">
+          <div class="sec-head">
+            <h3>今日事件 <span class="count-pill">${events.length}</span></h3>
+            ${hasConflict ? '<span class="conflict-tag" title="存在时间重叠的事件">⚠ 时段冲突</span>' : ''}
+            <button type="button" class="btn btn-ghost btn-sm" data-act="add-event">+ 添加</button>
+          </div>
+          <div class="event-list">
+            ${events.length ? events.map(e => eventItemHtml(e, date)).join('') : '<p class="empty-hint">该日暂无事件</p>'}
+          </div>
+        </section>
+        <section class="panel-sec">
+          <div class="sec-head">
+            <h3>批注 <span class="count-pill">${annotations.length}</span></h3>
+          </div>
+          <form class="anno-form" data-act="anno-add">
+            <textarea name="content" rows="2" required maxlength="500" placeholder="记录今天的情况 / 临时补充…（必填）"></textarea>
+            <div class="anno-form-row">
+              <input type="text" name="tags" placeholder="标签，逗号分隔（可选）" maxlength="60">
+              <select name="priority">
+                <option value="">优先级</option>
+                <option value="P0">P0</option>
+                <option value="P1">P1</option>
+                <option value="P2">P2</option>
+              </select>
+              <button type="submit" class="btn btn-primary btn-sm">添加</button>
+            </div>
+          </form>
+          <div class="anno-list">
+            ${annotations.length ? annotations.map(a => annoItemHtml(a)).join('') : '<p class="empty-hint">暂无批注，添加一条吧</p>'}
+          </div>
+        </section>
+      </div>
+    `;
+
+    // 关闭：右上角按钮 / 点击周边（弹层背景）
+    const closeBtn = container.querySelector('[data-act="close-day"]');
+    if (closeBtn && onClose) closeBtn.addEventListener('click', onClose);
+    if (onClose) container.addEventListener('click', e => {
+      if (e.target === container) onClose();
+    });
 
     container.querySelector('[data-act="add-event"]').addEventListener('click', () => {
       openEventForm({

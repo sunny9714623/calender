@@ -14,9 +14,6 @@
     '#D97706', '#DB2777', '#059669', '#64748B', '#C026D3'
   ];
 
-  // 批注优先级排序：P0 -> P1 -> P2 -> 未设置
-  const PRIORITY_ORDER = { P0: 0, P1: 1, P2: 2 };
-
   const EVENT_MAX_VISIBLE = 3;
   const ANN_MAX_VISIBLE = 3;
 
@@ -53,16 +50,9 @@
       `${escHtml(content)}</span>`;
   }
 
-  /** 某日批注：按优先级升序，同级按创建时间倒序 */
+  /** 某日批注：按优先级排序（P0→P1→P2→无），同级按创建时间升序 */
   function annotationsOf(store, date) {
-    return store.state.annotations
-      .filter(a => a.date === date)
-      .sort((x, y) => {
-        const px = x.priority in PRIORITY_ORDER ? PRIORITY_ORDER[x.priority] : 3;
-        const py = y.priority in PRIORITY_ORDER ? PRIORITY_ORDER[y.priority] : 3;
-        if (px !== py) return px - py;
-        return x.createdAt < y.createdAt ? 1 : -1;
-      });
+    return global.WS.stats.sortByPriority(store.state.annotations.filter(a => a.date === date));
   }
 
   function renderMonth(container, store, state, conflictDates, annoMap) {

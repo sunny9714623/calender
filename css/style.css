@@ -201,7 +201,7 @@ textarea { resize: vertical; }
 /* ---------- 主布局 ---------- */
 .app-body {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 340px;
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
   padding: 18px 22px 40px;
   max-width: 1500px;
@@ -442,11 +442,35 @@ textarea { resize: vertical; }
   border: 1px solid var(--line);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
-  position: sticky;
-  top: 78px;
-  max-height: calc(100vh - 96px);
+  position: static;
   overflow-y: auto;
 }
+
+/* ---------- 当日详情弹层 ---------- */
+.day-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 95;
+  background: rgba(15, 18, 20, .55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  animation: fadeIn .15s ease;
+}
+.day-overlay .day-panel {
+  width: 100%;
+  max-width: 560px;
+  max-height: 82vh;
+  border-radius: 14px;
+}
+.day-overlay .day-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+.day-overlay .day-close { flex: 0 0 auto; }
 .day-head { padding: 18px 18px 12px; border-bottom: 1px solid var(--line); }
 .day-head h2 { margin: 0 0 4px; font-size: 17px; }
 .day-date { margin: 0; color: var(--accent-ink); font-weight: 600; font-size: 13.5px; }
@@ -736,6 +760,12 @@ textarea { resize: vertical; }
   .card-main { grid-row: auto; }
 }
 @media (max-width: 720px) {
+  .day-overlay { align-items: flex-end; padding: 0; }
+  .day-overlay .day-panel {
+    max-width: 100%;
+    max-height: 88vh;
+    border-radius: 16px 16px 0 0;
+  }
   .topbar {
     padding: 10px 12px;
     padding-top: calc(env(safe-area-inset-top, 0px) + 10px);

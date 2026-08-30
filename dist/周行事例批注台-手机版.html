@@ -212,7 +212,7 @@ textarea { resize: vertical; }
 /* ---------- 主布局 ---------- */
 .app-body {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 340px;
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
   padding: 18px 22px 40px;
   max-width: 1500px;
@@ -453,11 +453,35 @@ textarea { resize: vertical; }
   border: 1px solid var(--line);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
-  position: sticky;
-  top: 78px;
-  max-height: calc(100vh - 96px);
+  position: static;
   overflow-y: auto;
 }
+
+/* ---------- 当日详情弹层 ---------- */
+.day-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 95;
+  background: rgba(15, 18, 20, .55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  animation: fadeIn .15s ease;
+}
+.day-overlay .day-panel {
+  width: 100%;
+  max-width: 560px;
+  max-height: 82vh;
+  border-radius: 14px;
+}
+.day-overlay .day-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+.day-overlay .day-close { flex: 0 0 auto; }
 .day-head { padding: 18px 18px 12px; border-bottom: 1px solid var(--line); }
 .day-head h2 { margin: 0 0 4px; font-size: 17px; }
 .day-date { margin: 0; color: var(--accent-ink); font-weight: 600; font-size: 13.5px; }
@@ -747,6 +771,12 @@ textarea { resize: vertical; }
   .card-main { grid-row: auto; }
 }
 @media (max-width: 720px) {
+  .day-overlay { align-items: flex-end; padding: 0; }
+  .day-overlay .day-panel {
+    max-width: 100%;
+    max-height: 88vh;
+    border-radius: 16px 16px 0 0;
+  }
   .topbar {
     padding: 10px 12px;
     padding-top: calc(env(safe-area-inset-top, 0px) + 10px);
@@ -818,8 +848,9 @@ textarea { resize: vertical; }
       </div>
       <div id="calendarGrid" class="calendar-grid"></div>
     </section>
-    <aside id="dayPanel" class="day-panel"></aside>
   </main>
+
+  <div id="dayPanel" class="day-overlay" hidden></div>
 
   <section id="statsArea" class="stats-area" hidden></section>
 
@@ -1870,6 +1901,18 @@ var Fr={},Gr={};var Wr,Hr=function(){function t(t,e,n){var i=this;this._sleepAft
       .filter(t => t !== '');
   }
 
+  /**
+   * 批注排序：优先级 P0 -> P1 -> P2 -> 无；同级按创建时间升序（日期早的在前）。
+   */
+  function sortByPriority(annotations) {
+    const rank = p => (p === 'P0' ? 0 : p === 'P1' ? 1 : p === 'P2' ? 2 : 3);
+    return annotations.slice().sort((x, y) => {
+      const r = rank(x.priority) - rank(y.priority);
+      if (r !== 0) return r;
+      return (x.createdAt || '') < (y.createdAt || '') ? -1 : 1;
+    });
+  }
+
   /** 按日计数：date -> count */
   function countByDate(annotations) {
     const map = new Map();
@@ -1965,7 +2008,10 @@ var Fr={},Gr={};var Wr,Hr=function(){function t(t,e,n){var i=this;this._sleepAft
     return '\uFEFF' + lines.join('\r\n');
   }
 
-  const stats = { splitTags, countByDate, dailyCounts, periodTotals, byTag, byPriority, annotationsOf, exportCSV };
+  const stats = {
+    splitTags, countByDate, dailyCounts, periodTotals, byTag, byPriority,
+    annotationsOf, exportCSV, sortByPriority
+  };
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = stats;
   } else {
@@ -2578,49 +2624,63 @@ var Fr={},Gr={};var Wr,Hr=function(){function t(t,e,n){var i=this;this._sleepAft
   const D = global.WS.dateutil;
   const { showToast, confirmDialog } = global.WS.toast;
   const { openEventForm, escAttr, escHtml } = global.WS.eventform;
+  const ST = global.WS.stats;
 
   function renderDayPanel(container, opts) {
-    const { date, store, conflictDates } = opts;
+    const { date, store, conflictDates, onClose } = opts;
     const events = store.state.events.filter(e => e.date === date || (e.crossDay && e.endDate === date));
-    const annotations = store.state.annotations.filter(a => a.date === date);
+    const annotations = ST.sortByPriority(store.state.annotations.filter(a => a.date === date));
     const hasConflict = conflictDates.has(date);
 
     container.innerHTML = `
-      <div class="day-head">
-        <h2>当日面板</h2>
-        <p class="day-date">${escHtml(D.formatTitle(date))}</p>
-      </div>
-      <section class="panel-sec">
-        <div class="sec-head">
-          <h3>今日事件 <span class="count-pill">${events.length}</span></h3>
-          ${hasConflict ? '<span class="conflict-tag" title="存在时间重叠的事件">⚠ 时段冲突</span>' : ''}
-          <button type="button" class="btn btn-ghost btn-sm" data-act="add-event">+ 添加</button>
-        </div>
-        <div class="event-list">
-          ${events.length ? events.map(e => eventItemHtml(e, date)).join('') : '<p class="empty-hint">该日暂无事件</p>'}
-        </div>
-      </section>
-      <section class="panel-sec">
-        <div class="sec-head">
-          <h3>批注 <span class="count-pill">${annotations.length}</span></h3>
-        </div>
-        <form class="anno-form" data-act="anno-add">
-          <textarea name="content" rows="2" required maxlength="500" placeholder="记录今天的情况 / 临时补充…（必填）"></textarea>
-          <div class="anno-form-row">
-            <input type="text" name="tags" placeholder="标签，逗号分隔（可选）" maxlength="60">
-            <select name="priority">
-              <option value="">优先级</option>
-              <option value="P0">P0</option>
-              <option value="P1">P1</option>
-              <option value="P2">P2</option>
-            </select>
-            <button type="submit" class="btn btn-primary btn-sm">添加</button>
+      <div class="day-panel">
+        <div class="day-head">
+          <div>
+            <h2>当日详情</h2>
+            <p class="day-date">${escHtml(D.formatTitle(date))}</p>
           </div>
-        </form>
-        <div class="anno-list">
-          ${annotations.length ? annotations.map(a => annoItemHtml(a)).join('') : '<p class="empty-hint">暂无批注，添加一条吧</p>'}
+          <button type="button" class="icon-btn day-close" data-act="close-day" title="关闭">✕</button>
         </div>
-      </section>`;
+        <section class="panel-sec">
+          <div class="sec-head">
+            <h3>今日事件 <span class="count-pill">${events.length}</span></h3>
+            ${hasConflict ? '<span class="conflict-tag" title="存在时间重叠的事件">⚠ 时段冲突</span>' : ''}
+            <button type="button" class="btn btn-ghost btn-sm" data-act="add-event">+ 添加</button>
+          </div>
+          <div class="event-list">
+            ${events.length ? events.map(e => eventItemHtml(e, date)).join('') : '<p class="empty-hint">该日暂无事件</p>'}
+          </div>
+        </section>
+        <section class="panel-sec">
+          <div class="sec-head">
+            <h3>批注 <span class="count-pill">${annotations.length}</span></h3>
+          </div>
+          <form class="anno-form" data-act="anno-add">
+            <textarea name="content" rows="2" required maxlength="500" placeholder="记录今天的情况 / 临时补充…（必填）"></textarea>
+            <div class="anno-form-row">
+              <input type="text" name="tags" placeholder="标签，逗号分隔（可选）" maxlength="60">
+              <select name="priority">
+                <option value="">优先级</option>
+                <option value="P0">P0</option>
+                <option value="P1">P1</option>
+                <option value="P2">P2</option>
+              </select>
+              <button type="submit" class="btn btn-primary btn-sm">添加</button>
+            </div>
+          </form>
+          <div class="anno-list">
+            ${annotations.length ? annotations.map(a => annoItemHtml(a)).join('') : '<p class="empty-hint">暂无批注，添加一条吧</p>'}
+          </div>
+        </section>
+      </div>
+    `;
+
+    // 关闭：右上角按钮 / 点击周边（弹层背景）
+    const closeBtn = container.querySelector('[data-act="close-day"]');
+    if (closeBtn && onClose) closeBtn.addEventListener('click', onClose);
+    if (onClose) container.addEventListener('click', e => {
+      if (e.target === container) onClose();
+    });
 
     container.querySelector('[data-act="add-event"]').addEventListener('click', () => {
       openEventForm({
@@ -2820,9 +2880,6 @@ var Fr={},Gr={};var Wr,Hr=function(){function t(t,e,n){var i=this;this._sleepAft
     '#D97706', '#DB2777', '#059669', '#64748B', '#C026D3'
   ];
 
-  // 批注优先级排序：P0 -> P1 -> P2 -> 未设置
-  const PRIORITY_ORDER = { P0: 0, P1: 1, P2: 2 };
-
   const EVENT_MAX_VISIBLE = 3;
   const ANN_MAX_VISIBLE = 3;
 
@@ -2859,16 +2916,9 @@ var Fr={},Gr={};var Wr,Hr=function(){function t(t,e,n){var i=this;this._sleepAft
       `${escHtml(content)}</span>`;
   }
 
-  /** 某日批注：按优先级升序，同级按创建时间倒序 */
+  /** 某日批注：按优先级排序（P0→P1→P2→无），同级按创建时间升序 */
   function annotationsOf(store, date) {
-    return store.state.annotations
-      .filter(a => a.date === date)
-      .sort((x, y) => {
-        const px = x.priority in PRIORITY_ORDER ? PRIORITY_ORDER[x.priority] : 3;
-        const py = y.priority in PRIORITY_ORDER ? PRIORITY_ORDER[y.priority] : 3;
-        if (px !== py) return px - py;
-        return x.createdAt < y.createdAt ? 1 : -1;
-      });
+    return global.WS.stats.sortByPriority(store.state.annotations.filter(a => a.date === date));
   }
 
   function renderMonth(container, store, state, conflictDates, annoMap) {
@@ -3946,6 +3996,7 @@ var Fr={},Gr={};var Wr,Hr=function(){function t(t,e,n){var i=this;this._sleepAft
     statsArea.hidden = tab !== 'stats';
     dataArea.hidden = tab !== 'data';
     if (fabGroup) fabGroup.hidden = tab !== 'calendar';
+    if (tab !== 'calendar') dayPanel.hidden = true;
     if (tab === 'stats' && !statsPanel) {
       statsPanel = global.WS.statspanel.createStatsPanel(statsArea, storeApi, {
         onJumpDate: date => app.jumpToDate(date),
@@ -3994,15 +4045,19 @@ var Fr={},Gr={};var Wr,Hr=function(){function t(t,e,n){var i=this;this._sleepAft
     global.WS.calendar.renderCalendar(calGrid, storeApi, app.state, (date, force) => app.selectDate(date, force));
 
     if (app.state.selected) {
+      dayPanel.hidden = false;
       global.WS.daypanel.renderDayPanel(dayPanel, {
         date: app.state.selected,
         store: storeApi,
-        conflictDates: storeApi.conflictDates()
+        conflictDates: storeApi.conflictDates(),
+        onClose: () => {
+          app.state.selected = null;
+          renderCalendarArea();
+        }
       });
     } else {
-      dayPanel.innerHTML = `
-        <div class="day-head"><h2>当日面板</h2></div>
-        <p class="empty-hint panel-empty">点击日历中的日期，查看事件与添加批注</p>`;
+      dayPanel.hidden = true;
+      dayPanel.innerHTML = '';
     }
   }
 

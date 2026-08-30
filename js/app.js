@@ -114,6 +114,7 @@
     statsArea.hidden = tab !== 'stats';
     dataArea.hidden = tab !== 'data';
     if (fabGroup) fabGroup.hidden = tab !== 'calendar';
+    if (tab !== 'calendar') dayPanel.hidden = true;
     if (tab === 'stats' && !statsPanel) {
       statsPanel = global.WS.statspanel.createStatsPanel(statsArea, storeApi, {
         onJumpDate: date => app.jumpToDate(date),
@@ -162,15 +163,19 @@
     global.WS.calendar.renderCalendar(calGrid, storeApi, app.state, (date, force) => app.selectDate(date, force));
 
     if (app.state.selected) {
+      dayPanel.hidden = false;
       global.WS.daypanel.renderDayPanel(dayPanel, {
         date: app.state.selected,
         store: storeApi,
-        conflictDates: storeApi.conflictDates()
+        conflictDates: storeApi.conflictDates(),
+        onClose: () => {
+          app.state.selected = null;
+          renderCalendarArea();
+        }
       });
     } else {
-      dayPanel.innerHTML = `
-        <div class="day-head"><h2>当日面板</h2></div>
-        <p class="empty-hint panel-empty">点击日历中的日期，查看事件与添加批注</p>`;
+      dayPanel.hidden = true;
+      dayPanel.innerHTML = '';
     }
   }
 

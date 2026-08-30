@@ -15,6 +15,18 @@
       .filter(t => t !== '');
   }
 
+  /**
+   * 批注排序：优先级 P0 -> P1 -> P2 -> 无；同级按创建时间升序（日期早的在前）。
+   */
+  function sortByPriority(annotations) {
+    const rank = p => (p === 'P0' ? 0 : p === 'P1' ? 1 : p === 'P2' ? 2 : 3);
+    return annotations.slice().sort((x, y) => {
+      const r = rank(x.priority) - rank(y.priority);
+      if (r !== 0) return r;
+      return (x.createdAt || '') < (y.createdAt || '') ? -1 : 1;
+    });
+  }
+
   /** 按日计数：date -> count */
   function countByDate(annotations) {
     const map = new Map();
@@ -110,7 +122,10 @@
     return '\uFEFF' + lines.join('\r\n');
   }
 
-  const stats = { splitTags, countByDate, dailyCounts, periodTotals, byTag, byPriority, annotationsOf, exportCSV };
+  const stats = {
+    splitTags, countByDate, dailyCounts, periodTotals, byTag, byPriority,
+    annotationsOf, exportCSV, sortByPriority
+  };
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = stats;
   } else {
