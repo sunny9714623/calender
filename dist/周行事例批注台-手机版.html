@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <title>周行事例批注台（手机离线版）</title>
   <link rel="icon" href="data:,">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -65,6 +65,9 @@ body {
   line-height: 1.65;
   font-variant-numeric: tabular-nums;
   -webkit-tap-highlight-color: transparent;
+}
+html, body, button, input, select, textarea, a, .cal-cell, .cal-event, .anno-item, .stats-detail-item {
+  touch-action: manipulation;
 }
 button { font: inherit; }
 input, select, textarea {
@@ -190,6 +193,25 @@ textarea { resize: vertical; }
 .calendar-area { min-width: 0; }
 .stats-area { padding: 18px 22px 60px; max-width: 1300px; margin: 0 auto; }
 
+/* ---------- 数据管理页 ---------- */
+.data-area { padding: 18px 22px 60px; max-width: 980px; margin: 0 auto; }
+.data-head h2 { margin: 0 0 4px; font-size: 20px; }
+.data-head p { margin: 0 0 16px; color: var(--muted); }
+.data-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.data-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 16px 18px;
+}
+.data-card h3 { margin: 0 0 8px; font-size: 15.5px; }
+.data-card h4 { margin: 18px 0 6px; font-size: 13px; color: var(--muted); }
+.data-desc { margin: 0 0 12px; font-size: 12.5px; color: var(--muted); }
+.data-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.data-actions .btn { justify-content: center; }
+.data-hint { margin: 12px 0 0; font-size: 12px; color: var(--muted); }
+
 /* ---------- 日历工具栏 ---------- */
 .cal-toolbar {
   display: flex;
@@ -248,7 +270,9 @@ textarea { resize: vertical; }
 .cal-cell.other-month .cal-daynum { color: var(--muted); opacity: .55; }
 .cal-cell.today .cal-daynum { background: var(--accent); color: #fff; }
 .cal-cell.selected { background: var(--accent-soft); box-shadow: inset 0 0 0 2px var(--accent); }
-.cal-cell-top { display: flex; align-items: center; gap: 5px; margin-bottom: 4px; }
+.cal-cell-top { display: flex; align-items: center; gap: 5px; margin-bottom: 4px; position: relative; }
+.cal-cell-top .anno-badge { position: absolute; top: 3px; right: 3px; }
+.cal-cell-top .conflict-dot { position: absolute; top: 3px; left: 3px; margin-left: 0; }
 .cal-daynum {
   font-size: 12.5px;
   font-weight: 600;
@@ -256,6 +280,7 @@ textarea { resize: vertical; }
   padding: 1px 6px;
   min-width: 26px;
   text-align: center;
+  margin: 0 auto;
 }
 .cal-daynum.weekend { color: var(--bad); }
 .conflict-dot { color: var(--warn); font-size: 11px; margin-left: auto; }
@@ -707,8 +732,9 @@ textarea { resize: vertical; }
   }
   .topbar-actions::-webkit-scrollbar { display: none; }
   .topbar-actions .btn { flex: 0 0 auto; }
-  .app-body, .stats-area { padding: 12px 10px 40px; }
-  .app-body, .stats-area { padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 40px); }
+  .app-body, .stats-area, .data-area { padding: 12px 10px 40px; }
+  .app-body, .stats-area, .data-area { padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 40px); }
+  .data-grid { grid-template-columns: 1fr; }
   input, select, textarea { font-size: 16px; }
   .cal-cell { min-height: 74px; padding: 4px 5px; }
   .cal-event { font-size: 10px; }
@@ -731,19 +757,11 @@ textarea { resize: vertical; }
       </div>
     </div>
     <div class="topbar-actions">
-      <button id="btnImport" class="btn btn-primary" type="button">⇪ 导入周行事例</button>
-      <div class="seg" id="viewSwitch" role="group" aria-label="视图切换">
-        <button type="button" data-view="month" class="active">月</button>
-        <button type="button" data-view="week">周</button>
-        <button type="button" data-view="day">日</button>
-      </div>
       <div class="seg tab-switch" id="tabSwitch" role="group" aria-label="页签">
         <button type="button" data-tab="calendar" class="active">日历</button>
         <button type="button" data-tab="stats">统计</button>
+        <button type="button" data-tab="data">数据</button>
       </div>
-      <button id="btnBackup" class="btn btn-ghost btn-sm" type="button">备份</button>
-      <button id="btnRestore" class="btn btn-ghost btn-sm" type="button">恢复</button>
-      <button id="btnClear" class="btn btn-ghost btn-sm danger-text" type="button">清空</button>
       <button id="btnTheme" class="icon-btn" type="button" title="切换主题">◐</button>
     </div>
   </header>
@@ -757,6 +775,11 @@ textarea { resize: vertical; }
           <button id="btnNext" class="btn btn-ghost btn-sm" type="button" title="下一个">›</button>
         </div>
         <h2 id="calTitle"></h2>
+        <div class="seg" id="viewSwitch" role="group" aria-label="视图切换">
+          <button type="button" data-view="month" class="active">月</button>
+          <button type="button" data-view="week">周</button>
+          <button type="button" data-view="day">日</button>
+        </div>
         <div class="cal-legend">
           <span class="lg"><i class="lg-swatch allday"></i>全天</span>
           <span class="lg" title="当前视图范围内的批注数"><i class="anno-badge" id="legendAnnoCount">0</i>本视图批注</span>
@@ -769,6 +792,32 @@ textarea { resize: vertical; }
   </main>
 
   <section id="statsArea" class="stats-area" hidden></section>
+
+  <section id="dataArea" class="data-area" hidden>
+    <div class="data-head">
+      <h2>数据管理</h2>
+      <p>导入周行事例、备份与恢复、清空数据都在这里。</p>
+    </div>
+    <div class="data-grid">
+      <div class="data-card">
+        <h3>导入周行事例</h3>
+        <p class="data-desc">支持 .docx / .xlsx / .xls / .csv / .txt，自动识别标准表与「周次 × 周一~周日」周历网格模板。</p>
+        <button id="btnImport" class="btn btn-primary" type="button">⇪ 导入周行事例</button>
+        <h4>最近导入记录</h4>
+        <div id="dataImportHistory" class="history-list"></div>
+      </div>
+      <div class="data-card">
+        <h3>备份与恢复</h3>
+        <p class="data-desc">当前数据：事件 <b id="dataEventCount">0</b> 条 · 批注 <b id="dataAnnoCount">0</b> 条（仅存本机浏览器）</p>
+        <div class="data-actions">
+          <button id="btnBackup" class="btn" type="button">⬇ 导出备份（JSON）</button>
+          <button id="btnRestore" class="btn" type="button">⇪ 从备份恢复</button>
+          <button id="btnClear" class="btn danger-text" type="button">🗑 清空全部数据</button>
+        </div>
+        <p class="data-hint">备份可跨设备/浏览器恢复；清空前请先导出备份。</p>
+      </div>
+    </div>
+  </section>
 
   <input type="file" id="restoreInput" accept=".json" hidden>
 
@@ -3699,6 +3748,8 @@ var Fr={},Gr={};var Wr,Hr=function(){function t(t,e,n){var i=this;this._sleepAft
     refresh() {
       if (this.state.tab === 'calendar') {
         renderCalendarArea();
+      } else if (this.state.tab === 'data') {
+        renderDataPage();
       } else {
         if (statsPanel) statsPanel.render();
       }
@@ -3729,6 +3780,7 @@ var Fr={},Gr={};var Wr,Hr=function(){function t(t,e,n){var i=this;this._sleepAft
   const dayPanel = document.getElementById('dayPanel');
   const calTitle = document.getElementById('calTitle');
   const statsArea = document.getElementById('statsArea');
+  const dataArea = document.getElementById('dataArea');
   const restoreInput = document.getElementById('restoreInput');
 
   // ---------- 主题 ----------
@@ -3787,13 +3839,32 @@ var Fr={},Gr={};var Wr,Hr=function(){function t(t,e,n){var i=this;this._sleepAft
     document.querySelectorAll('#tabSwitch [data-tab]').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
     document.getElementById('calendarArea').hidden = tab !== 'calendar';
     statsArea.hidden = tab !== 'stats';
+    dataArea.hidden = tab !== 'data';
     if (tab === 'stats' && !statsPanel) {
       statsPanel = global.WS.statspanel.createStatsPanel(statsArea, storeApi, {
         onJumpDate: date => app.jumpToDate(date),
         defaultAnchor: app.state.selected || app.state.anchor || D.todayISO()
       });
     }
+    if (tab === 'data') renderDataPage();
     app.refresh();
+  }
+
+  function escHtml(s) {
+    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function renderDataPage() {
+    document.getElementById('dataEventCount').textContent = storeApi.state.events.length;
+    document.getElementById('dataAnnoCount').textContent = storeApi.state.annotations.length;
+    const listEl = document.getElementById('dataImportHistory');
+    const files = storeApi.state.files.slice(0, 8);
+    listEl.innerHTML = files.length
+      ? files.map(f =>
+          `<div class="history-item"><span class="hist-name">${escHtml(f.fileName)}</span>` +
+          `<span class="hist-meta">${escHtml((f.importTime || '').replace('T', ' ').slice(0, 16))} · 成功 ${f.successRows}/${f.totalRows}</span></div>`
+        ).join('')
+      : '<p class="empty-hint">暂无导入记录</p>';
   }
 
   // ---------- 渲染 ----------

@@ -55,6 +55,9 @@ body {
   font-variant-numeric: tabular-nums;
   -webkit-tap-highlight-color: transparent;
 }
+html, body, button, input, select, textarea, a, .cal-cell, .cal-event, .anno-item, .stats-detail-item {
+  touch-action: manipulation;
+}
 button { font: inherit; }
 input, select, textarea {
   font: inherit;
@@ -179,6 +182,25 @@ textarea { resize: vertical; }
 .calendar-area { min-width: 0; }
 .stats-area { padding: 18px 22px 60px; max-width: 1300px; margin: 0 auto; }
 
+/* ---------- 数据管理页 ---------- */
+.data-area { padding: 18px 22px 60px; max-width: 980px; margin: 0 auto; }
+.data-head h2 { margin: 0 0 4px; font-size: 20px; }
+.data-head p { margin: 0 0 16px; color: var(--muted); }
+.data-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.data-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 16px 18px;
+}
+.data-card h3 { margin: 0 0 8px; font-size: 15.5px; }
+.data-card h4 { margin: 18px 0 6px; font-size: 13px; color: var(--muted); }
+.data-desc { margin: 0 0 12px; font-size: 12.5px; color: var(--muted); }
+.data-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.data-actions .btn { justify-content: center; }
+.data-hint { margin: 12px 0 0; font-size: 12px; color: var(--muted); }
+
 /* ---------- 日历工具栏 ---------- */
 .cal-toolbar {
   display: flex;
@@ -237,7 +259,9 @@ textarea { resize: vertical; }
 .cal-cell.other-month .cal-daynum { color: var(--muted); opacity: .55; }
 .cal-cell.today .cal-daynum { background: var(--accent); color: #fff; }
 .cal-cell.selected { background: var(--accent-soft); box-shadow: inset 0 0 0 2px var(--accent); }
-.cal-cell-top { display: flex; align-items: center; gap: 5px; margin-bottom: 4px; }
+.cal-cell-top { display: flex; align-items: center; gap: 5px; margin-bottom: 4px; position: relative; }
+.cal-cell-top .anno-badge { position: absolute; top: 3px; right: 3px; }
+.cal-cell-top .conflict-dot { position: absolute; top: 3px; left: 3px; margin-left: 0; }
 .cal-daynum {
   font-size: 12.5px;
   font-weight: 600;
@@ -245,6 +269,7 @@ textarea { resize: vertical; }
   padding: 1px 6px;
   min-width: 26px;
   text-align: center;
+  margin: 0 auto;
 }
 .cal-daynum.weekend { color: var(--bad); }
 .conflict-dot { color: var(--warn); font-size: 11px; margin-left: auto; }
@@ -696,8 +721,9 @@ textarea { resize: vertical; }
   }
   .topbar-actions::-webkit-scrollbar { display: none; }
   .topbar-actions .btn { flex: 0 0 auto; }
-  .app-body, .stats-area { padding: 12px 10px 40px; }
-  .app-body, .stats-area { padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 40px); }
+  .app-body, .stats-area, .data-area { padding: 12px 10px 40px; }
+  .app-body, .stats-area, .data-area { padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 40px); }
+  .data-grid { grid-template-columns: 1fr; }
   input, select, textarea { font-size: 16px; }
   .cal-cell { min-height: 74px; padding: 4px 5px; }
   .cal-event { font-size: 10px; }

@@ -17,14 +17,10 @@
     </div>
     <div class="topbar-actions">
       <button id="btnImport" class="btn btn-primary" type="button">⇪ 导入周行事例</button>
-      <div class="seg" id="viewSwitch" role="group" aria-label="视图切换">
-        <button type="button" data-view="month" class="active">月</button>
-        <button type="button" data-view="week">周</button>
-        <button type="button" data-view="day">日</button>
-      </div>
       <div class="seg tab-switch" id="tabSwitch" role="group" aria-label="页签">
         <button type="button" data-tab="calendar" class="active">日历</button>
         <button type="button" data-tab="stats">统计</button>
+        <button type="button" data-tab="data">数据</button>
       </div>
       <button id="btnBackup" class="btn btn-ghost btn-sm" type="button">备份</button>
       <button id="btnRestore" class="btn btn-ghost btn-sm" type="button">恢复</button>
@@ -41,6 +37,11 @@
           <button id="btnNext" class="btn btn-ghost btn-sm" type="button" title="下一个">›</button>
         </div>
         <h2 id="calTitle"></h2>
+        <div class="seg" id="viewSwitch" role="group" aria-label="视图切换">
+          <button type="button" data-view="month" class="active">月</button>
+          <button type="button" data-view="week">周</button>
+          <button type="button" data-view="day">日</button>
+        </div>
         <div class="cal-legend">
           <span class="lg"><i class="lg-swatch allday"></i>全天</span>
           <span class="lg" title="当前视图范围内的批注数"><i class="anno-badge" id="legendAnnoCount">0</i>本视图批注</span>
@@ -52,6 +53,16 @@
     <aside id="dayPanel" class="day-panel"></aside>
   </main>
   <section id="statsArea" class="stats-area" hidden></section>
+  <section id="dataArea" class="data-area" hidden>
+    <div class="data-head"><h2>数据管理</h2></div>
+    <div class="data-grid">
+      <div class="data-card">
+        <h3>当前数据</h3>
+        <p>事件 <b id="dataEventCount">0</b> 条 · 批注 <b id="dataAnnoCount">0</b> 条</p>
+        <div id="dataImportHistory"></div>
+      </div>
+    </div>
+  </section>
   <input type="file" id="restoreInput" accept=".json" hidden>
   <script src="../vendor/xlsx.full.min.js"></script>
   <script src="../vendor/papaparse.min.js"></script>
@@ -117,6 +128,12 @@
         const firstTwo = Array.from(grid.querySelectorAll('.cal-anno')).slice(0, 2);
         log(firstTwo.length === 2 && firstTwo[0].querySelector('.anno-prio').textContent === 'P0' && firstTwo[1].querySelector('.anno-prio').textContent === 'P1', '批注按优先级 P0→P1 排序');
         log(annoPrios.includes('无'), '无优先级批注显示「无」');
+        const cell31 = grid.querySelector('[data-date="2026-08-31"]');
+        const numEl = cell31.querySelector('.cal-daynum');
+        const cr = cell31.getBoundingClientRect();
+        const nr = numEl.getBoundingClientRect();
+        log(Math.abs((cr.left + cr.width / 2) - (nr.left + nr.width / 2)) < 10, '日期数字水平居中');
+        log(!!document.getElementById('viewSwitch') && !!document.querySelector('#calendarArea #viewSwitch'), '月/周/日切换按钮位于日历工具栏');
         log(document.getElementById('legendAnnoCount').textContent === '2', '8月视图图例批注数 2（实际 ' + document.getElementById('legendAnnoCount').textContent + '）');
 
         const panel = document.getElementById('dayPanel');
@@ -142,6 +159,13 @@
         statsEnd.dispatchEvent(new Event('change'));
         await new Promise(r => setTimeout(r, 150));
         log(document.querySelector('[data-c="total"]').textContent === '0' && !document.querySelector('[data-c="empty"]').hidden, '无数据区间显示空态提示');
+        document.querySelector('[data-tab="data"]').click();
+        await new Promise(r => setTimeout(r, 150));
+        log(document.getElementById('dataArea').hidden === false, '数据管理页显示');
+        log(document.getElementById('dataEventCount').textContent === '2' && document.getElementById('dataAnnoCount').textContent === '3', '数据页计数正确（事件2/批注3，实际 ' + document.getElementById('dataEventCount').textContent + '/' + document.getElementById('dataAnnoCount').textContent + '）');
+        log(document.getElementById('dataImportHistory').textContent.includes('暂无导入记录'), '数据页导入记录空态提示');
+        document.querySelector('[data-tab="calendar"]').click();
+        await new Promise(r => setTimeout(r, 100));
 
         const all = store.state.annotations;
         store.deleteAnnotation(all[0].id);

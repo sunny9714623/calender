@@ -20,6 +20,8 @@
     refresh() {
       if (this.state.tab === 'calendar') {
         renderCalendarArea();
+      } else if (this.state.tab === 'data') {
+        renderDataPage();
       } else {
         if (statsPanel) statsPanel.render();
       }
@@ -50,6 +52,7 @@
   const dayPanel = document.getElementById('dayPanel');
   const calTitle = document.getElementById('calTitle');
   const statsArea = document.getElementById('statsArea');
+  const dataArea = document.getElementById('dataArea');
   const restoreInput = document.getElementById('restoreInput');
 
   // ---------- 主题 ----------
@@ -108,13 +111,32 @@
     document.querySelectorAll('#tabSwitch [data-tab]').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
     document.getElementById('calendarArea').hidden = tab !== 'calendar';
     statsArea.hidden = tab !== 'stats';
+    dataArea.hidden = tab !== 'data';
     if (tab === 'stats' && !statsPanel) {
       statsPanel = global.WS.statspanel.createStatsPanel(statsArea, storeApi, {
         onJumpDate: date => app.jumpToDate(date),
         defaultAnchor: app.state.selected || app.state.anchor || D.todayISO()
       });
     }
+    if (tab === 'data') renderDataPage();
     app.refresh();
+  }
+
+  function escHtml(s) {
+    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function renderDataPage() {
+    document.getElementById('dataEventCount').textContent = storeApi.state.events.length;
+    document.getElementById('dataAnnoCount').textContent = storeApi.state.annotations.length;
+    const listEl = document.getElementById('dataImportHistory');
+    const files = storeApi.state.files.slice(0, 8);
+    listEl.innerHTML = files.length
+      ? files.map(f =>
+          `<div class="history-item"><span class="hist-name">${escHtml(f.fileName)}</span>` +
+          `<span class="hist-meta">${escHtml((f.importTime || '').replace('T', ' ').slice(0, 16))} · 成功 ${f.successRows}/${f.totalRows}</span></div>`
+        ).join('')
+      : '<p class="empty-hint">暂无导入记录</p>';
   }
 
   // ---------- 渲染 ----------
