@@ -159,6 +159,8 @@
     // 图例中的批注数：统计当前视图范围内的批注（月=当月、周=当周、日=当日）
     const legendCount = document.getElementById('legendAnnoCount');
     if (legendCount) legendCount.textContent = visibleAnnoCount();
+    const legendEvt = document.getElementById('legendEventCount');
+    if (legendEvt) legendEvt.textContent = visibleEventCount();
 
     // 标题
     const a = app.state.anchor;
@@ -203,6 +205,20 @@
     }
     const prefix = anchor.slice(0, 7);
     return annos.filter(a => a.date && a.date.startsWith(prefix)).length;
+  }
+
+  function visibleEventCount() {
+    const evs = storeApi.state.events;
+    const anchor = app.state.anchor;
+    if (app.state.view === 'day') {
+      return evs.filter(e => e.date === anchor || (e.crossDay && e.endDate === anchor)).length;
+    }
+    if (app.state.view === 'week') {
+      const w = D.getWeekRange(anchor);
+      return evs.filter(e => e.date && e.date >= w.start && e.date <= w.end).length;
+    }
+    const prefix = anchor.slice(0, 7);
+    return evs.filter(e => e.date && e.date.startsWith(prefix)).length;
   }
 
   // ---------- 导入 ----------

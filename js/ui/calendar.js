@@ -34,10 +34,6 @@
     return `<span class="cal-event${ev.allDay ? ' allday' : ''}" title="${escAttr(ev.title + (ev.location ? ' @' + ev.location : ''))}">${cross}${escHtml(time)} ${escHtml(ev.title)}</span>`;
   }
 
-  function annotationBadge(count) {
-    return count > 0 ? `<span class="anno-badge" title="${count} 条批注">${count}</span>` : '';
-  }
-
   /** 日历格内的批注行：彩色序号 + 内容（单行省略） */
   function annoLineHtml(an, num) {
     const color = ANNO_COLORS[(num - 1) % ANNO_COLORS.length];
@@ -79,11 +75,16 @@
           date === state.selected ? 'selected' : ''
         ].filter(Boolean).join(' ');
         const wd = D.weekdayFromDate(date);
+        const evtCount = sorted.length;
+        const annoCount = annos.length;
         html.push(`
           <div class="${cls}" data-date="${date}">
             <div class="cal-cell-top">
               <span class="cal-daynum${wd === 0 || wd === 6 ? ' weekend' : ''}">${Number(date.slice(8))}</span>
-              ${annotationBadge(annoMap.get(date) || 0)}
+              <div class="cell-counts">
+                ${evtCount > 0 ? `<span class="count-badge evt" title="${evtCount} 个事件">${evtCount}</span>` : ''}
+                ${annoCount > 0 ? `<span class="count-badge anno" title="${annoCount} 条批注">${annoCount}</span>` : ''}
+              </div>
               ${conflictDates.has(date) ? '<span class="conflict-dot" title="时段冲突">⚠</span>' : ''}
             </div>
             <div class="cal-events">
@@ -119,7 +120,8 @@
           <div class="cal-week-col-head">
             <span class="cal-weekday-label">${D.weekdayLabel(date)}</span>
             <span class="cal-daynum${D.weekdayFromDate(date) === 0 || D.weekdayFromDate(date) === 6 ? ' weekend' : ''}">${Number(date.slice(8))}</span>
-            ${annotationBadge(annoMap.get(date) || 0)}
+            ${evs.length > 0 ? `<span class="count-badge evt" title="${evs.length} 个事件">${evs.length}</span>` : ''}
+            ${annoMap.get(date) > 0 ? `<span class="count-badge anno" title="${annoMap.get(date)} 条批注">${annoMap.get(date)}</span>` : ''}
             ${conflictDates.has(date) ? '<span class="conflict-dot">⚠</span>' : ''}
           </div>
           <div class="cal-week-all">

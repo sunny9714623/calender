@@ -301,8 +301,29 @@ textarea { resize: vertical; }
 .cal-cell.today .cal-daynum { background: var(--accent); color: #fff; }
 .cal-cell.selected { background: var(--accent-soft); box-shadow: inset 0 0 0 2px var(--accent); }
 .cal-cell-top { display: flex; align-items: center; gap: 5px; margin-bottom: 4px; position: relative; }
-.cal-cell-top .anno-badge { position: absolute; top: 3px; right: 3px; }
+.cal-cell-top .cell-counts {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  display: flex;
+  gap: 3px;
+}
 .cal-cell-top .conflict-dot { position: absolute; top: 3px; left: 3px; margin-left: 0; }
+.count-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1;
+}
+.count-badge.evt { background: var(--accent); }
+.count-badge.anno { background: var(--mark); }
 .cal-daynum {
   font-size: 12.5px;
   font-weight: 600;
@@ -842,7 +863,8 @@ textarea { resize: vertical; }
         </div>
         <div class="cal-legend">
           <span class="lg"><i class="lg-swatch allday"></i>全天</span>
-          <span class="lg" title="当前视图范围内的批注数"><i class="anno-badge" id="legendAnnoCount">0</i>本视图批注</span>
+          <span class="lg" title="当前视图范围内的事件数"><i class="count-badge evt" id="legendEventCount">0</i>事件数</span>
+          <span class="lg" title="当前视图范围内的批注数"><i class="count-badge anno" id="legendAnnoCount">0</i>批注数</span>
           <span class="lg"><i class="lg-conflict-demo">⚠</i>冲突</span>
         </div>
       </div>
@@ -2900,10 +2922,6 @@ var Fr={},Gr={};var Wr,Hr=function(){function t(t,e,n){var i=this;this._sleepAft
     return `<span class="cal-event${ev.allDay ? ' allday' : ''}" title="${escAttr(ev.title + (ev.location ? ' @' + ev.location : ''))}">${cross}${escHtml(time)} ${escHtml(ev.title)}</span>`;
   }
 
-  function annotationBadge(count) {
-    return count > 0 ? `<span class="anno-badge" title="${count} 条批注">${count}</span>` : '';
-  }
-
   /** 日历格内的批注行：彩色序号 + 内容（单行省略） */
   function annoLineHtml(an, num) {
     const color = ANNO_COLORS[(num - 1) % ANNO_COLORS.length];
@@ -2945,11 +2963,16 @@ var Fr={},Gr={};var Wr,Hr=function(){function t(t,e,n){var i=this;this._sleepAft
           date === state.selected ? 'selected' : ''
         ].filter(Boolean).join(' ');
         const wd = D.weekdayFromDate(date);
+        const evtCount = sorted.length;
+        const annoCount = annos.length;
         html.push(`
           <div class="${cls}" data-date="${date}">
             <div class="cal-cell-top">
               <span class="cal-daynum${wd === 0 || wd === 6 ? ' weekend' : ''}">${Number(date.slice(8))}</span>
-              ${annotationBadge(annoMap.get(date) || 0)}
+              <div class="cell-counts">
+                ${evtCount > 0 ? `<span class="count-badge evt" title="${evtCount} 个事件">${evtCount}</span>` : ''}
+                ${annoCount > 0 ? `<span class="count-badge anno" title="${annoCount} 条批注">${annoCount}</span>` : ''}
+              </div>
               ${conflictDates.has(date) ? '<span class="conflict-dot" title="时段冲突">⚠</span>' : ''}
             </div>
             <div class="cal-events">
@@ -2985,7 +3008,8 @@ var Fr={},Gr={};var Wr,Hr=function(){function t(t,e,n){var i=this;this._sleepAft
           <div class="cal-week-col-head">
             <span class="cal-weekday-label">${D.weekdayLabel(date)}</span>
             <span class="cal-daynum${D.weekdayFromDate(date) === 0 || D.weekdayFromDate(date) === 6 ? ' weekend' : ''}">${Number(date.slice(8))}</span>
-            ${annotationBadge(annoMap.get(date) || 0)}
+            ${evs.length > 0 ? `<span class="count-badge evt" title="${evs.length} 个事件">${evs.length}</span>` : ''}
+            ${annoMap.get(date) > 0 ? `<span class="count-badge anno" title="${annoMap.get(date)} 条批注">${annoMap.get(date)}</span>` : ''}
             ${conflictDates.has(date) ? '<span class="conflict-dot">⚠</span>' : ''}
           </div>
           <div class="cal-week-all">
@@ -4041,6 +4065,8 @@ var Fr={},Gr={};var Wr,Hr=function(){function t(t,e,n){var i=this;this._sleepAft
     // 图例中的批注数：统计当前视图范围内的批注（月=当月、周=当周、日=当日）
     const legendCount = document.getElementById('legendAnnoCount');
     if (legendCount) legendCount.textContent = visibleAnnoCount();
+    const legendEvt = document.getElementById('legendEventCount');
+    if (legendEvt) legendEvt.textContent = visibleEventCount();
 
     // 标题
     const a = app.state.anchor;
@@ -4085,6 +4111,20 @@ var Fr={},Gr={};var Wr,Hr=function(){function t(t,e,n){var i=this;this._sleepAft
     }
     const prefix = anchor.slice(0, 7);
     return annos.filter(a => a.date && a.date.startsWith(prefix)).length;
+  }
+
+  function visibleEventCount() {
+    const evs = storeApi.state.events;
+    const anchor = app.state.anchor;
+    if (app.state.view === 'day') {
+      return evs.filter(e => e.date === anchor || (e.crossDay && e.endDate === anchor)).length;
+    }
+    if (app.state.view === 'week') {
+      const w = D.getWeekRange(anchor);
+      return evs.filter(e => e.date && e.date >= w.start && e.date <= w.end).length;
+    }
+    const prefix = anchor.slice(0, 7);
+    return evs.filter(e => e.date && e.date.startsWith(prefix)).length;
   }
 
   // ---------- 导入 ----------

@@ -44,7 +44,8 @@
         </div>
         <div class="cal-legend">
           <span class="lg"><i class="lg-swatch allday"></i>全天</span>
-          <span class="lg" title="当前视图范围内的批注数"><i class="anno-badge" id="legendAnnoCount">0</i>本视图批注</span>
+          <span class="lg" title="当前视图范围内的事件数"><i class="count-badge evt" id="legendEventCount">0</i>事件数</span>
+          <span class="lg" title="当前视图范围内的批注数"><i class="count-badge anno" id="legendAnnoCount">0</i>批注数</span>
           <span class="lg"><i class="lg-conflict-demo">⚠</i>冲突</span>
         </div>
       </div>
@@ -122,7 +123,7 @@
         log(grid.querySelectorAll('.cal-cell').length === 42, '月历渲染 42 格（实际 ' + grid.querySelectorAll('.cal-cell').length + '）');
         log(grid.textContent.includes('部门周例会'), '事件显示');
         log(grid.textContent.includes('全天培训'), '全天事件显示');
-        log(grid.querySelectorAll('.anno-badge').length >= 2, '批注角标出现（' + grid.querySelectorAll('.anno-badge').length + '）');
+        log(grid.querySelectorAll('.count-badge.anno').length >= 2, '批注角标出现（' + grid.querySelectorAll('.count-badge.anno').length + '）');
         const annoLines = grid.querySelectorAll('.cal-anno');
         log(annoLines.length >= 2, '日历格显示批注行（' + annoLines.length + '）');
         log(annoLines.length >= 1 && getComputedStyle(annoLines[0]).display === 'block', '批注逐行换行展示');
@@ -140,6 +141,13 @@
         log(Math.abs((cr.left + cr.width / 2) - (nr.left + nr.width / 2)) < 10, '日期数字水平居中');
         log(!!document.getElementById('viewSwitch') && !!document.querySelector('#calendarArea #viewSwitch'), '月/周/日切换按钮位于日历工具栏');
         log(document.getElementById('legendAnnoCount').textContent === '2', '8月视图图例批注数 2（实际 ' + document.getElementById('legendAnnoCount').textContent + '）');
+        const evtBadge31 = cell31.querySelector('.count-badge.evt');
+        const annoBadge31 = cell31.querySelector('.count-badge.anno');
+        log(evtBadge31 && evtBadge31.textContent === '1', '日期格显示事件数角标（实际 ' + (evtBadge31 ? evtBadge31.textContent : '无') + '）');
+        log(annoBadge31 && annoBadge31.textContent === '2', '日期格显示批注数角标（实际 ' + (annoBadge31 ? annoBadge31.textContent : '无') + '）');
+        log(evtBadge31 && annoBadge31 && getComputedStyle(evtBadge31).backgroundColor !== getComputedStyle(annoBadge31).backgroundColor, '事件数与批注数角标颜色不同');
+        const legendEvt = document.getElementById('legendEventCount');
+        log(!!legendEvt && legendEvt.textContent === '1' && getComputedStyle(legendEvt).backgroundColor !== getComputedStyle(document.getElementById('legendAnnoCount')).backgroundColor, '图例区分事件数/批注数颜色（' + legendEvt.textContent + '/' + document.getElementById('legendAnnoCount').textContent + '）');
 
         const panel = document.getElementById('dayPanel');
         log(panel.hidden === false, '点击日期弹出当日详情弹层');
