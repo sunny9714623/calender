@@ -51,6 +51,7 @@
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html {
   scroll-behavior: smooth;
   -webkit-text-size-adjust: 100%;
@@ -127,6 +128,34 @@ textarea { resize: vertical; }
 }
 .icon-btn:hover { border-color: var(--bad); color: var(--bad); }
 .icon-btn.danger:hover { border-color: var(--bad); color: var(--bad); }
+
+/* ---------- 悬浮快捷按钮（添加事件 / 添加批注） ---------- */
+.fab-group {
+  position: fixed;
+  right: 16px;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 90;
+}
+.fab {
+  border: none;
+  border-radius: 999px;
+  padding: 12px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .28);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform .12s, box-shadow .12s;
+}
+.fab:active { transform: scale(.96); }
+.fab-event { background: var(--accent); }
+.fab-anno { background: var(--mark); }
 
 /* ---------- 分段控件 ---------- */
 .seg {
@@ -818,6 +847,11 @@ textarea { resize: vertical; }
       </div>
     </div>
   </section>
+
+  <div class="fab-group" id="fabGroup" hidden>
+    <button id="btnFabAnno" class="fab fab-anno" type="button">＋ 添加批注</button>
+    <button id="btnFabEvent" class="fab fab-event" type="button">＋ 添加事件</button>
+  </div>
 
   <input type="file" id="restoreInput" accept=".json" hidden>
 
@@ -2470,6 +2504,71 @@ var Fr={},Gr={};var Wr,Hr=function(){function t(t,e,n){var i=this;this._sleepAft
 </script>
   <script>
 /**
+ * 批注快速添加弹窗（悬浮按钮使用）。
+ */
+(function (global) {
+  'use strict';
+
+  const D = global.WS.dateutil;
+  const { showToast } = global.WS.toast;
+
+  function openAnnoForm(opts) {
+    const { date, onSave } = opts;
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+      <div class="modal anno-modal" role="dialog" aria-modal="true">
+        <h3 class="modal-title">添加批注 · ${D.formatTitle(date)}</h3>
+        <form class="anno-form">
+          <textarea name="content" rows="3" required maxlength="500" placeholder="记录今天的情况 / 临时补充…（必填）"></textarea>
+          <div class="anno-form-row">
+            <input type="text" name="tags" placeholder="标签，逗号分隔（可选）" maxlength="60">
+            <select name="priority">
+              <option value="">优先级</option>
+              <option value="P0">P0</option>
+              <option value="P1">P1</option>
+              <option value="P2">P2</option>
+            </select>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="btn btn-ghost" data-act="cancel">取消</button>
+            <button type="submit" class="btn btn-primary">添加</button>
+          </div>
+        </form>
+      </div>`;
+
+    const close = () => overlay.remove();
+    overlay.addEventListener('click', e => {
+      if (e.target === overlay) close();
+    });
+    overlay.querySelector('[data-act="cancel"]').addEventListener('click', close);
+    overlay.querySelector('form').addEventListener('submit', e => {
+      e.preventDefault();
+      const content = String(e.currentTarget.content.value || '').trim();
+      if (!content) {
+        showToast('批注内容不能为空', 'error');
+        return;
+      }
+      const data = {
+        date,
+        content,
+        tags: String(e.currentTarget.tags.value || '').trim(),
+        priority: e.currentTarget.priority.value
+      };
+      onSave(data);
+      close();
+    });
+    document.body.appendChild(overlay);
+    overlay.querySelector('textarea').focus();
+  }
+
+  global.WS = global.WS || {};
+  global.WS.annoform = { openAnnoForm };
+})(window);
+
+</script>
+  <script>
+/**
  * 当日面板：事件列表 + 批注 CRUD。
  */
 (function (global) {
@@ -3781,6 +3880,7 @@ var Fr={},Gr={};var Wr,Hr=function(){function t(t,e,n){var i=this;this._sleepAft
   const calTitle = document.getElementById('calTitle');
   const statsArea = document.getElementById('statsArea');
   const dataArea = document.getElementById('dataArea');
+  const fabGroup = document.getElementById('fabGroup');
   const restoreInput = document.getElementById('restoreInput');
 
   // ---------- 主题 ----------
@@ -3840,6 +3940,7 @@ var Fr={},Gr={};var Wr,Hr=function(){function t(t,e,n){var i=this;this._sleepAft
     document.getElementById('calendarArea').hidden = tab !== 'calendar';
     statsArea.hidden = tab !== 'stats';
     dataArea.hidden = tab !== 'data';
+    if (fabGroup) fabGroup.hidden = tab !== 'calendar';
     if (tab === 'stats' && !statsPanel) {
       statsPanel = global.WS.statspanel.createStatsPanel(statsArea, storeApi, {
         onJumpDate: date => app.jumpToDate(date),
@@ -3923,6 +4024,43 @@ var Fr={},Gr={};var Wr,Hr=function(){function t(t,e,n){var i=this;this._sleepAft
           const first = events.reduce((min, e) => (e.date < min ? e.date : min), events[0].date);
           app.state.anchor = first;
           app.state.selected = first;
+        }
+        app.refresh();
+      }
+    });
+  });
+
+  // ---------- 悬浮快捷按钮：添加事件 / 添加批注 ----------
+  function fabDate() {
+    return app.state.selected || app.state.anchor || D.todayISO();
+  }
+
+  const fabEventBtn = document.getElementById('btnFabEvent');
+  const fabAnnoBtn = document.getElementById('btnFabAnno');
+  if (fabEventBtn) fabEventBtn.addEventListener('click', () => {
+    global.WS.eventform.openEventForm({
+      date: fabDate(),
+      onSave: data => {
+        storeApi.addEvent(data);
+        global.WS.toast.showToast('事件已添加', 'success');
+        if (data.date !== app.state.selected) {
+          app.state.selected = data.date;
+          app.state.anchor = data.date;
+        }
+        app.refresh();
+      }
+    });
+  });
+
+  if (fabAnnoBtn) fabAnnoBtn.addEventListener('click', () => {
+    global.WS.annoform.openAnnoForm({
+      date: fabDate(),
+      onSave: data => {
+        storeApi.addAnnotation(data);
+        global.WS.toast.showToast('批注已添加', 'success');
+        if (data.date !== app.state.selected) {
+          app.state.selected = data.date;
+          app.state.anchor = data.date;
         }
         app.refresh();
       }

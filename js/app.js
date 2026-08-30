@@ -53,6 +53,7 @@
   const calTitle = document.getElementById('calTitle');
   const statsArea = document.getElementById('statsArea');
   const dataArea = document.getElementById('dataArea');
+  const fabGroup = document.getElementById('fabGroup');
   const restoreInput = document.getElementById('restoreInput');
 
   // ---------- 主题 ----------
@@ -112,6 +113,7 @@
     document.getElementById('calendarArea').hidden = tab !== 'calendar';
     statsArea.hidden = tab !== 'stats';
     dataArea.hidden = tab !== 'data';
+    if (fabGroup) fabGroup.hidden = tab !== 'calendar';
     if (tab === 'stats' && !statsPanel) {
       statsPanel = global.WS.statspanel.createStatsPanel(statsArea, storeApi, {
         onJumpDate: date => app.jumpToDate(date),
@@ -195,6 +197,43 @@
           const first = events.reduce((min, e) => (e.date < min ? e.date : min), events[0].date);
           app.state.anchor = first;
           app.state.selected = first;
+        }
+        app.refresh();
+      }
+    });
+  });
+
+  // ---------- 悬浮快捷按钮：添加事件 / 添加批注 ----------
+  function fabDate() {
+    return app.state.selected || app.state.anchor || D.todayISO();
+  }
+
+  const fabEventBtn = document.getElementById('btnFabEvent');
+  const fabAnnoBtn = document.getElementById('btnFabAnno');
+  if (fabEventBtn) fabEventBtn.addEventListener('click', () => {
+    global.WS.eventform.openEventForm({
+      date: fabDate(),
+      onSave: data => {
+        storeApi.addEvent(data);
+        global.WS.toast.showToast('事件已添加', 'success');
+        if (data.date !== app.state.selected) {
+          app.state.selected = data.date;
+          app.state.anchor = data.date;
+        }
+        app.refresh();
+      }
+    });
+  });
+
+  if (fabAnnoBtn) fabAnnoBtn.addEventListener('click', () => {
+    global.WS.annoform.openAnnoForm({
+      date: fabDate(),
+      onSave: data => {
+        storeApi.addAnnotation(data);
+        global.WS.toast.showToast('批注已添加', 'success');
+        if (data.date !== app.state.selected) {
+          app.state.selected = data.date;
+          app.state.anchor = data.date;
         }
         app.refresh();
       }

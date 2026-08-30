@@ -63,6 +63,10 @@
       </div>
     </div>
   </section>
+  <div class="fab-group" id="fabGroup" hidden>
+    <button id="btnFabAnno" class="fab fab-anno" type="button">＋ 添加批注</button>
+    <button id="btnFabEvent" class="fab fab-event" type="button">＋ 添加事件</button>
+  </div>
   <input type="file" id="restoreInput" accept=".json" hidden>
   <script src="../vendor/xlsx.full.min.js"></script>
   <script src="../vendor/papaparse.min.js"></script>
@@ -77,6 +81,7 @@
   <script src="../js/core/filereader.js"></script>
   <script src="../js/ui/toast.js"></script>
   <script src="../js/ui/eventform.js"></script>
+  <script src="../js/ui/annoform.js"></script>
   <script src="../js/ui/daypanel.js"></script>
   <script src="../js/ui/calendar.js"></script>
   <script src="../js/ui/importmodal.js"></script>
@@ -144,6 +149,7 @@
         document.querySelector('[data-tab="stats"]').click();
         await new Promise(r => setTimeout(r, 400));
         log(document.getElementById('statsArea').hidden === false, '统计视图显示');
+        log(document.getElementById('calendarArea').hidden === true && getComputedStyle(document.getElementById('calendarArea')).display === 'none', '统计页不显示日历');
         log(document.querySelectorAll('#statsArea .chart-card').length === 3, '统计三张卡片');
         log(document.querySelectorAll('#statsArea canvas').length >= 3, 'ECharts 已渲染 canvas（' + document.querySelectorAll('#statsArea canvas').length + '）');
         log(document.querySelector('[data-c="total"]').textContent === '2', '区间批注总数仅统计所选区间（8月=2，实际 ' + document.querySelector('[data-c="total"]').textContent + '）');
@@ -162,6 +168,8 @@
         document.querySelector('[data-tab="data"]').click();
         await new Promise(r => setTimeout(r, 150));
         log(document.getElementById('dataArea').hidden === false, '数据管理页显示');
+        log(document.getElementById('calendarArea').hidden === true && getComputedStyle(document.getElementById('calendarArea')).display === 'none', '数据页不显示日历');
+        log(document.getElementById('fabGroup').hidden === true, '统计/数据页不显示悬浮按钮');
         log(document.getElementById('dataEventCount').textContent === '2' && document.getElementById('dataAnnoCount').textContent === '3', '数据页计数正确（事件2/批注3，实际 ' + document.getElementById('dataEventCount').textContent + '/' + document.getElementById('dataAnnoCount').textContent + '）');
         log(document.getElementById('dataImportHistory').textContent.includes('暂无导入记录'), '数据页导入记录空态提示');
         document.querySelector('[data-tab="calendar"]').click();
@@ -286,6 +294,22 @@
         log(store.state.events.some(e => e.title === '元旦假' && e.date === '2027-01-01'), '含 2027-01-01 元旦假');
         log(store.state.files[0].fileName === '2026年下学期周行事历.docx', '导入记录含真实文件名');
         log(!document.querySelector('.import-modal'), '导入弹窗已关闭');
+
+        // 悬浮快捷按钮：添加批注 / 添加事件
+        log(document.getElementById('fabGroup').hidden === false, '日历页显示悬浮按钮');
+        document.getElementById('btnFabAnno').click();
+        await new Promise(r => setTimeout(r, 100));
+        log(!!document.querySelector('.anno-modal'), '悬浮按钮打开批注弹窗');
+        const fabForm = document.querySelector('.anno-modal form');
+        fabForm.querySelector('[name="content"]').value = 'FAB批注';
+        fabForm.querySelector('button[type="submit"]').click();
+        await new Promise(r => setTimeout(r, 150));
+        log(store.state.annotations.some(a => a.content === 'FAB批注'), '悬浮按钮添加批注成功');
+        document.getElementById('btnFabEvent').click();
+        await new Promise(r => setTimeout(r, 100));
+        log(!!document.querySelector('.event-modal'), '悬浮按钮打开事件弹窗');
+        const fabEventCancel = document.querySelector('.event-modal [data-act="cancel"]');
+        if (fabEventCancel) fabEventCancel.click();
       } catch (e) {
         out.push('FATAL ' + e.message + ' @ ' + (e.stack || '').split('\n')[1]);
       }

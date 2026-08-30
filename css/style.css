@@ -40,6 +40,7 @@
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html {
   scroll-behavior: smooth;
   -webkit-text-size-adjust: 100%;
@@ -116,6 +117,34 @@ textarea { resize: vertical; }
 }
 .icon-btn:hover { border-color: var(--bad); color: var(--bad); }
 .icon-btn.danger:hover { border-color: var(--bad); color: var(--bad); }
+
+/* ---------- 悬浮快捷按钮（添加事件 / 添加批注） ---------- */
+.fab-group {
+  position: fixed;
+  right: 16px;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 90;
+}
+.fab {
+  border: none;
+  border-radius: 999px;
+  padding: 12px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .28);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform .12s, box-shadow .12s;
+}
+.fab:active { transform: scale(.96); }
+.fab-event { background: var(--accent); }
+.fab-anno { background: var(--mark); }
 
 /* ---------- 分段控件 ---------- */
 .seg {
