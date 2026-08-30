@@ -67,9 +67,7 @@ body {
   font-variant-numeric: tabular-nums;
   -webkit-tap-highlight-color: transparent;
 }
-html, body, button, input, select, textarea, a, .cal-cell, .cal-event, .anno-item, .stats-detail-item {
-  touch-action: manipulation;
-}
+* { touch-action: manipulation; }
 button { font: inherit; }
 input, select, textarea {
   font: inherit;
@@ -271,25 +269,28 @@ textarea { resize: vertical; }
 /* ---------- 日历工具栏 ---------- */
 .cal-toolbar {
   display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.cal-toolbar-row {
+  display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
   flex-wrap: nowrap;
-  margin-bottom: 12px;
+  width: 100%;
 }
 .cal-nav { display: flex; gap: 6px; flex: 0 0 auto; }
 #calTitle {
   margin: 0;
   font-size: 19px;
   font-weight: 700;
-  flex: 1 1 auto;
-  min-width: 0;
-  text-align: center;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  text-align: left;
+  white-space: normal;
 }
-.cal-toolbar .seg { flex: 0 0 auto; }
+.cal-toolbar-row .seg { flex: 0 0 auto; }
 .cal-legend { display: flex; gap: 14px; color: var(--muted); font-size: 12px; align-items: center; }
 .lg { display: inline-flex; align-items: center; gap: 5px; }
 .lg-swatch { width: 22px; height: 10px; border-radius: 3px; background: var(--accent-soft); display: inline-block; border: 1px solid var(--accent); }
@@ -919,22 +920,24 @@ textarea { resize: vertical; }
   <main class="app-body" id="calendarArea">
     <section class="calendar-area">
       <div class="cal-toolbar">
-        <div class="cal-nav">
-          <button id="btnPrev" class="btn btn-ghost btn-sm" type="button" title="上一个">‹</button>
-          <button id="btnToday" class="btn btn-ghost btn-sm" type="button">今天</button>
-          <button id="btnNext" class="btn btn-ghost btn-sm" type="button" title="下一个">›</button>
-        </div>
         <h2 id="calTitle"></h2>
-        <div class="seg" id="viewSwitch" role="group" aria-label="视图切换">
-          <button type="button" data-view="month" class="active">月</button>
-          <button type="button" data-view="week">周</button>
-          <button type="button" data-view="day">日</button>
-        </div>
-        <div class="cal-legend">
-          <span class="lg"><i class="lg-swatch allday"></i>全天</span>
-          <span class="lg" title="当前视图范围内的事件数"><i class="count-badge evt" id="legendEventCount">0</i>事件数</span>
-          <span class="lg" title="当前视图范围内的批注数"><i class="count-badge anno" id="legendAnnoCount">0</i>批注数</span>
-          <span class="lg"><i class="lg-conflict-demo">⚠</i>冲突</span>
+        <div class="cal-toolbar-row">
+          <div class="cal-nav">
+            <button id="btnPrev" class="btn btn-ghost btn-sm" type="button" title="上一个">‹</button>
+            <button id="btnToday" class="btn btn-ghost btn-sm" type="button">今天</button>
+            <button id="btnNext" class="btn btn-ghost btn-sm" type="button" title="下一个">›</button>
+          </div>
+          <div class="seg" id="viewSwitch" role="group" aria-label="视图切换">
+            <button type="button" data-view="month" class="active">月</button>
+            <button type="button" data-view="week">周</button>
+            <button type="button" data-view="day">日</button>
+          </div>
+          <div class="cal-legend">
+            <span class="lg"><i class="lg-swatch allday"></i>全天</span>
+            <span class="lg" title="当前视图范围内的事件数"><i class="count-badge evt" id="legendEventCount">0</i>事件数</span>
+            <span class="lg" title="当前视图范围内的批注数"><i class="count-badge anno" id="legendAnnoCount">0</i>批注数</span>
+            <span class="lg"><i class="lg-conflict-demo">⚠</i>冲突</span>
+          </div>
         </div>
       </div>
       <div id="calendarGrid" class="calendar-grid"></div>

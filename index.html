@@ -11,7 +11,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="format-detection" content="telephone=no">
   <meta name="theme-color" content="#0F766E">
-  <link rel="stylesheet" href="css/style.css?v=20260831m">
+  <link rel="stylesheet" href="css/style.css?v=20260831n">
 </head>
 <body>
   <header class="topbar">
@@ -35,22 +35,24 @@
   <main class="app-body" id="calendarArea">
     <section class="calendar-area">
       <div class="cal-toolbar">
-        <div class="cal-nav">
-          <button id="btnPrev" class="btn btn-ghost btn-sm" type="button" title="上一个">‹</button>
-          <button id="btnToday" class="btn btn-ghost btn-sm" type="button">今天</button>
-          <button id="btnNext" class="btn btn-ghost btn-sm" type="button" title="下一个">›</button>
-        </div>
         <h2 id="calTitle"></h2>
-        <div class="seg" id="viewSwitch" role="group" aria-label="视图切换">
-          <button type="button" data-view="month" class="active">月</button>
-          <button type="button" data-view="week">周</button>
-          <button type="button" data-view="day">日</button>
-        </div>
-        <div class="cal-legend">
-          <span class="lg"><i class="lg-swatch allday"></i>全天</span>
-          <span class="lg" title="当前视图范围内的事件数"><i class="count-badge evt" id="legendEventCount">0</i>事件数</span>
-          <span class="lg" title="当前视图范围内的批注数"><i class="count-badge anno" id="legendAnnoCount">0</i>批注数</span>
-          <span class="lg"><i class="lg-conflict-demo">⚠</i>冲突</span>
+        <div class="cal-toolbar-row">
+          <div class="cal-nav">
+            <button id="btnPrev" class="btn btn-ghost btn-sm" type="button" title="上一个">‹</button>
+            <button id="btnToday" class="btn btn-ghost btn-sm" type="button">今天</button>
+            <button id="btnNext" class="btn btn-ghost btn-sm" type="button" title="下一个">›</button>
+          </div>
+          <div class="seg" id="viewSwitch" role="group" aria-label="视图切换">
+            <button type="button" data-view="month" class="active">月</button>
+            <button type="button" data-view="week">周</button>
+            <button type="button" data-view="day">日</button>
+          </div>
+          <div class="cal-legend">
+            <span class="lg"><i class="lg-swatch allday"></i>全天</span>
+            <span class="lg" title="当前视图范围内的事件数"><i class="count-badge evt" id="legendEventCount">0</i>事件数</span>
+            <span class="lg" title="当前视图范围内的批注数"><i class="count-badge anno" id="legendAnnoCount">0</i>批注数</span>
+            <span class="lg"><i class="lg-conflict-demo">⚠</i>冲突</span>
+          </div>
         </div>
       </div>
       <div id="calendarGrid" class="calendar-grid"></div>
@@ -102,24 +104,24 @@
     }
   </script>
 
-  <script src="vendor/xlsx.full.min.js?v=20260831m"></script>
-  <script src="vendor/papaparse.min.js?v=20260831m"></script>
-  <script src="vendor/mammoth.browser.min.js?v=20260831m"></script>
-  <script src="vendor/echarts.min.js?v=20260831m"></script>
-  <script src="js/util/dateutil.js?v=20260831m"></script>
-  <script src="js/util/aliases.js?v=20260831m"></script>
-  <script src="js/core/rowparser.js?v=20260831m"></script>
-  <script src="js/core/parser.js?v=20260831m"></script>
-  <script src="js/core/stats.js?v=20260831m"></script>
-  <script src="js/core/store.js?v=20260831m"></script>
-  <script src="js/core/filereader.js?v=20260831m"></script>
-  <script src="js/ui/toast.js?v=20260831m"></script>
-  <script src="js/ui/eventform.js?v=20260831m"></script>
-  <script src="js/ui/annoform.js?v=20260831m"></script>
-  <script src="js/ui/daypanel.js?v=20260831m"></script>
-  <script src="js/ui/calendar.js?v=20260831m"></script>
-  <script src="js/ui/importmodal.js?v=20260831m"></script>
-  <script src="js/ui/statspanel.js?v=20260831m"></script>
-  <script src="js/app.js?v=20260831m"></script>
+  <script src="vendor/xlsx.full.min.js?v=20260831n"></script>
+  <script src="vendor/papaparse.min.js?v=20260831n"></script>
+  <script src="vendor/mammoth.browser.min.js?v=20260831n"></script>
+  <script src="vendor/echarts.min.js?v=20260831n"></script>
+  <script src="js/util/dateutil.js?v=20260831n"></script>
+  <script src="js/util/aliases.js?v=20260831n"></script>
+  <script src="js/core/rowparser.js?v=20260831n"></script>
+  <script src="js/core/parser.js?v=20260831n"></script>
+  <script src="js/core/stats.js?v=20260831n"></script>
+  <script src="js/core/store.js?v=20260831n"></script>
+  <script src="js/core/filereader.js?v=20260831n"></script>
+  <script src="js/ui/toast.js?v=20260831n"></script>
+  <script src="js/ui/eventform.js?v=20260831n"></script>
+  <script src="js/ui/annoform.js?v=20260831n"></script>
+  <script src="js/ui/daypanel.js?v=20260831n"></script>
+  <script src="js/ui/calendar.js?v=20260831n"></script>
+  <script src="js/ui/importmodal.js?v=20260831n"></script>
+  <script src="js/ui/statspanel.js?v=20260831n"></script>
+  <script src="js/app.js?v=20260831n"></script>
 </body>
 </html>

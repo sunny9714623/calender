@@ -2,6 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <title>Browser Smoke Test</title>
   <link rel="stylesheet" href="../css/style.css">
 </head>
@@ -31,22 +32,24 @@
   <main class="app-body" id="calendarArea">
     <section class="calendar-area">
       <div class="cal-toolbar">
-        <div class="cal-nav">
-          <button id="btnPrev" class="btn btn-ghost btn-sm" type="button" title="上一个">‹</button>
-          <button id="btnToday" class="btn btn-ghost btn-sm" type="button">今天</button>
-          <button id="btnNext" class="btn btn-ghost btn-sm" type="button" title="下一个">›</button>
-        </div>
         <h2 id="calTitle"></h2>
-        <div class="seg" id="viewSwitch" role="group" aria-label="视图切换">
-          <button type="button" data-view="month" class="active">月</button>
-          <button type="button" data-view="week">周</button>
-          <button type="button" data-view="day">日</button>
-        </div>
-        <div class="cal-legend">
-          <span class="lg"><i class="lg-swatch allday"></i>全天</span>
-          <span class="lg" title="当前视图范围内的事件数"><i class="count-badge evt" id="legendEventCount">0</i>事件数</span>
-          <span class="lg" title="当前视图范围内的批注数"><i class="count-badge anno" id="legendAnnoCount">0</i>批注数</span>
-          <span class="lg"><i class="lg-conflict-demo">⚠</i>冲突</span>
+        <div class="cal-toolbar-row">
+          <div class="cal-nav">
+            <button id="btnPrev" class="btn btn-ghost btn-sm" type="button" title="上一个">‹</button>
+            <button id="btnToday" class="btn btn-ghost btn-sm" type="button">今天</button>
+            <button id="btnNext" class="btn btn-ghost btn-sm" type="button" title="下一个">›</button>
+          </div>
+          <div class="seg" id="viewSwitch" role="group" aria-label="视图切换">
+            <button type="button" data-view="month" class="active">月</button>
+            <button type="button" data-view="week">周</button>
+            <button type="button" data-view="day">日</button>
+          </div>
+          <div class="cal-legend">
+            <span class="lg"><i class="lg-swatch allday"></i>全天</span>
+            <span class="lg" title="当前视图范围内的事件数"><i class="count-badge evt" id="legendEventCount">0</i>事件数</span>
+            <span class="lg" title="当前视图范围内的批注数"><i class="count-badge anno" id="legendAnnoCount">0</i>批注数</span>
+            <span class="lg"><i class="lg-conflict-demo">⚠</i>冲突</span>
+          </div>
         </div>
       </div>
       <div id="calendarGrid" class="calendar-grid"></div>
@@ -208,9 +211,11 @@
         app.refresh();
         log(!!document.querySelector('.cal-day-timeline'), '日视图时间轴');
         const calToolbarEl = document.querySelector('.cal-toolbar');
+        const calRowEl = document.querySelector('.cal-toolbar-row');
         const navEl = document.querySelector('.cal-nav');
         const vsEl = document.getElementById('viewSwitch');
-        log(getComputedStyle(calToolbarEl).flexWrap === 'nowrap', '日历工具栏单行不换行');
+        const calTitleEl = document.getElementById('calTitle');
+        log(getComputedStyle(calToolbarEl).flexDirection === 'column' && getComputedStyle(calRowEl).flexWrap === 'nowrap', '标题独立一行，导航/月周日/图例固定一行');
         app.state.anchor = '2026-10-15';
         app.state.view = 'week';
         app.refresh();
@@ -220,9 +225,11 @@
           return Math.abs((n.top + n.height / 2) - (v.top + v.height / 2)) < 2;
         };
         log(sameRow(), '切到周视图月/周/日仍在同一排');
+        log(calTitleEl.textContent.includes('10月') && calTitleEl.scrollWidth <= calTitleEl.clientWidth + 1, '周视图标题完整显示不截断（' + calTitleEl.textContent + '）');
         app.state.view = 'day';
         app.refresh();
         log(sameRow(), '切到日视图月/周/日仍在同一排');
+        log(calTitleEl.textContent.includes('10月15日') && calTitleEl.scrollWidth <= calTitleEl.clientWidth + 1, '日视图标题完整显示不截断（' + calTitleEl.textContent + '）');
         app.state.anchor = '2026-10-01';
         app.state.view = 'month';
         app.refresh();
@@ -230,6 +237,7 @@
         app.state.anchor = '2026-08-31';
         app.state.view = 'month';
         app.refresh();
+        log(document.querySelector('meta[name="viewport"]').content.includes('user-scalable=no'), '视口锁定禁止放大');
 
         // 事件编辑弹窗
         const editBtns = document.querySelectorAll('#dayPanel [data-act="edit-event"]');
