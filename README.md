@@ -79,7 +79,7 @@ npm run serve        # python -m http.server 8080
 ## 目录结构
 
 ```text
-dir_photo/
+zhouxingshili/
 ├─ index.html                 # 单页入口（经典脚本，无模块 CORS 问题）
 ├─ css/style.css              # 浅色/深色主题、响应式布局
 ├─ js/
