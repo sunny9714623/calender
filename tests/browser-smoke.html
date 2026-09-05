@@ -124,6 +124,7 @@
 
         const grid = document.getElementById('calendarGrid');
         log(grid.querySelectorAll('.cal-cell').length === 42, '月历渲染 42 格（实际 ' + grid.querySelectorAll('.cal-cell').length + '）');
+        log(document.getElementById('fabGroup').hidden === false, '首次加载日历页悬浮按钮即可见');
         log(grid.textContent.includes('部门周例会'), '事件显示');
         log(grid.textContent.includes('全天培训'), '全天事件显示');
         log(grid.querySelectorAll('.count-badge.anno').length >= 2, '批注角标出现（' + grid.querySelectorAll('.count-badge.anno').length + '）');

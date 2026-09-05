@@ -24,6 +24,34 @@
     });
   }
 
+  /** 事件按日期索引：同一条跨天事件同时挂到开始日与结束日；组内按全天/时间排好序 */
+  function indexEventsByDate(events) {
+    const map = new Map();
+    const add = (date, ev) => {
+      if (!date) return;
+      if (!map.has(date)) map.set(date, []);
+      map.get(date).push(ev);
+    };
+    for (const ev of events) {
+      add(ev.date, ev);
+      if (ev.crossDay && ev.endDate && ev.endDate !== ev.date) add(ev.endDate, ev);
+    }
+    map.forEach((list, date) => map.set(date, sortEvents(list)));
+    return map;
+  }
+
+  /** 批注按日期索引并预排序（P0→P1→P2→无，同级按创建时间升序） */
+  function indexAnnotationsByDate(annotations) {
+    const map = new Map();
+    for (const an of annotations) {
+      if (!an.date) continue;
+      if (!map.has(an.date)) map.set(an.date, []);
+      map.get(an.date).push(an);
+    }
+    map.forEach((list, date) => map.set(date, global.WS.stats.sortByPriority(list)));
+    return map;
+  }
+
   function eventChipHtml(ev, selectedDate) {
     const time = ev.allDay
       ? '全天'
@@ -46,12 +74,7 @@
       `${escHtml(content)}</span>`;
   }
 
-  /** 某日批注：按优先级排序（P0→P1→P2→无），同级按创建时间升序 */
-  function annotationsOf(store, date) {
-    return global.WS.stats.sortByPriority(store.state.annotations.filter(a => a.date === date));
-  }
-
-  function renderMonth(container, store, state, conflictDates, annoMap) {
+  function renderMonth(container, eventMap, annoMap, state, conflictDates) {
     const [year, month] = state.anchor.split('-').map(Number);
     const weeks = D.monthGrid(year, month);
     const html = [];
@@ -60,9 +83,8 @@
     for (const week of weeks) {
       for (const date of week) {
         const inMonth = date.startsWith(year + '-' + String(month).padStart(2, '0'));
-        const evs = store.state.events.filter(e => e.date === date || (e.crossDay && e.endDate === date));
-        const sorted = sortEvents(evs);
-        const annos = annotationsOf(store, date);
+        const sorted = eventMap.get(date) || [];
+        const annos = annoMap.get(date) || [];
         const visibleEvents = sorted.slice(0, EVENT_MAX_VISIBLE);
         const moreEvents = sorted.length - visibleEvents.length;
         const visibleAnnos = annos.slice(0, ANN_MAX_VISIBLE);
@@ -99,17 +121,16 @@
     container.innerHTML = html.join('');
   }
 
-  function renderWeek(container, store, state, conflictDates, annoMap) {
+  function renderWeek(container, eventMap, annoMap, state, conflictDates) {
     const weekStart = D.getWeekStart(state.anchor);
     const days = [];
     for (let i = 0; i < 7; i++) days.push(D.addDays(weekStart, i));
     const html = ['<div class="cal-week-grid">'];
     for (const date of days) {
-      const evs = store.state.events.filter(e => e.date === date || (e.crossDay && e.endDate === date));
-      const sorted = sortEvents(evs);
+      const sorted = eventMap.get(date) || [];
       const allDays = sorted.filter(e => e.allDay);
       const timed = sorted.filter(e => !e.allDay);
-      const annos = annotationsOf(store, date);
+      const annos = annoMap.get(date) || [];
       const cls = [
         'cal-week-col',
         date === D.todayISO() ? 'today' : '',
@@ -120,8 +141,8 @@
           <div class="cal-week-col-head">
             <span class="cal-weekday-label">${D.weekdayLabel(date)}</span>
             <span class="cal-daynum${D.weekdayFromDate(date) === 0 || D.weekdayFromDate(date) === 6 ? ' weekend' : ''}">${Number(date.slice(8))}</span>
-            ${evs.length > 0 ? `<span class="count-badge evt" title="${evs.length} 个事件">${evs.length}</span>` : ''}
-            ${annoMap.get(date) > 0 ? `<span class="count-badge anno" title="${annoMap.get(date)} 条批注">${annoMap.get(date)}</span>` : ''}
+            ${sorted.length > 0 ? `<span class="count-badge evt" title="${sorted.length} 个事件">${sorted.length}</span>` : ''}
+            ${annos.length > 0 ? `<span class="count-badge anno" title="${annos.length} 条批注">${annos.length}</span>` : ''}
             ${conflictDates.has(date) ? '<span class="conflict-dot">⚠</span>' : ''}
           </div>
           <div class="cal-week-all">
@@ -137,12 +158,12 @@
     container.innerHTML = html.join('');
   }
 
-  function renderDay(container, store, state, conflictDates, annoMap) {
+  function renderDay(container, eventMap, annoMap, state, conflictDates) {
     const date = state.anchor;
-    const evs = store.state.events.filter(e => e.date === date || (e.crossDay && e.endDate === date));
-    const allDays = sortEvents(evs).filter(e => e.allDay);
-    const timed = sortEvents(evs).filter(e => !e.allDay);
-    const annos = annotationsOf(store, date);
+    const sorted = eventMap.get(date) || [];
+    const allDays = sorted.filter(e => e.allDay);
+    const timed = sorted.filter(e => !e.allDay);
+    const annos = annoMap.get(date) || [];
     const PX = 48; // 每小时高度
     const HOURS = 24;
     const html = [];
@@ -191,13 +212,11 @@
 
   function renderCalendar(container, store, state, onSelect) {
     const conflictDates = store.conflictDates();
-    const annoMap = new Map();
-    for (const a of store.state.annotations) {
-      annoMap.set(a.date, (annoMap.get(a.date) || 0) + 1);
-    }
-    if (state.view === 'week') renderWeek(container, store, state, conflictDates, annoMap);
-    else if (state.view === 'day') renderDay(container, store, state, conflictDates, annoMap);
-    else renderMonth(container, store, state, conflictDates, annoMap);
+    const eventMap = indexEventsByDate(store.state.events);
+    const annoMap = indexAnnotationsByDate(store.state.annotations);
+    if (state.view === 'week') renderWeek(container, eventMap, annoMap, state, conflictDates);
+    else if (state.view === 'day') renderDay(container, eventMap, annoMap, state, conflictDates);
+    else renderMonth(container, eventMap, annoMap, state, conflictDates);
 
     container.querySelectorAll('[data-date]').forEach(el => {
       el.addEventListener('click', e => {

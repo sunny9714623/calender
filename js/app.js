@@ -509,4 +509,5 @@
   applyBrand();
   applyCalendarBg();
   renderCalendarArea();
+  if (fabGroup) fabGroup.hidden = app.state.tab !== 'calendar';
 })(window);
