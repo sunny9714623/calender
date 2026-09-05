@@ -118,9 +118,14 @@
       openEventForm({
         date,
         onSave: data => {
-          store.addEvent(data);
-          showToast('事件已添加', 'success');
-          jumpToEventDate(data.date);
+          const saved = store.addEvent(data);
+          if (Array.isArray(saved)) {
+            showToast('已添加 ' + saved.length + ' 条事件', 'success');
+            jumpToEventDate(saved[0].date);
+          } else {
+            showToast('事件已添加', 'success');
+            jumpToEventDate(saved.date);
+          }
         }
       });
     });

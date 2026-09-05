@@ -70,6 +70,18 @@
     return prefix + '_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
   }
 
+  /** ISO 日期加天数（本地时区，避免 UTC 时区漂移） */
+  function addDaysISO(iso, n) {
+    if (typeof iso !== 'string') return null;
+    const m = iso.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+    if (!m) return null;
+    const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]) + n);
+    const y = d.getFullYear();
+    const mon = d.getMonth() + 1;
+    const day = d.getDate();
+    return y + '-' + String(mon).padStart(2, '0') + '-' + String(day).padStart(2, '0');
+  }
+
   function createStore() {
     const store = load();
     return {
@@ -101,8 +113,35 @@
         save(store);
         return { events: stamped, store: store };
       },
+      /** 批量新增（重复展开等一次性写入多条时使用，只保存一次） */
+      addEvents(events) {
+        const now = new Date().toISOString();
+        const stamped = events.map(ev => ({
+          id: uid('ev'),
+          createdAt: now,
+          ...ev
+        }));
+        store.events.push(...stamped);
+        save(store);
+        return stamped;
+      },
       addEvent(ev) {
+        // 按月重复：repeatDates 为展开后的日期列表，逐条生成事件（跨天结束日按每条日期重算）
+        if (Array.isArray(ev.repeatDates) && ev.repeatDates.length) {
+          const base = { ...ev };
+          delete base.repeatDates;
+          const instances = ev.repeatDates.map(d => {
+            const item = { ...base, date: d };
+            if (!item.allDay && item.startTime && item.endTime && item.endTime < item.startTime) {
+              item.crossDay = true;
+              item.endDate = addDaysISO(d, 1);
+            }
+            return item;
+          });
+          return this.addEvents(instances);
+        }
         const item = { id: uid('ev'), createdAt: new Date().toISOString(), ...ev };
+        delete item.repeatDates;
         store.events.push(item);
         save(store);
         return item;

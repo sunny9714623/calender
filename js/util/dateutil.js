@@ -161,6 +161,21 @@
     return addDays(iso, -w);
   }
 
+  /** 某年内某月所有指定星期（周一=0，周日=6）的日期列表（ISO） */
+  function weekdayDatesInMonth(year, month, weekday) {
+    if (!year || !month || weekday === null || weekday === undefined) return [];
+    if (weekday < 0 || weekday > 6) return [];
+    const first = makeDate(year, month, 1);
+    if (!first) return [];
+    const daysInMonth = new Date(year, month, 0).getDate();
+    const out = [];
+    for (let d = 1; d <= daysInMonth; d++) {
+      const iso = toISODate(makeDate(year, month, d));
+      if (weekdayFromDate(iso) === weekday) out.push(iso);
+    }
+    return out;
+  }
+
   /** 所在周范围 {start, end}（周一到周日） */
   function getWeekRange(iso) {
     const start = getWeekStart(iso);
@@ -225,7 +240,7 @@
     pad2, toISODate, todayISO, addDays, parseISODate, parseDate, parseTime,
     formatMinutes, parseWeekday, weekdayFromDate, weekdayLabel, getWeekStart,
     getWeekRange, monthGrid, dateRange, formatDisplay, formatTitle, monthLabel,
-    WEEKDAY_TEXT
+    weekdayDatesInMonth, WEEKDAY_TEXT
   };
 
   if (typeof module !== 'undefined' && module.exports) {

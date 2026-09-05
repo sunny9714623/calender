@@ -771,6 +771,71 @@ textarea { resize: vertical; }
 .field-row { display: flex; gap: 10px; }
 .field-row .field { flex: 1; }
 .field-check { flex-direction: row; align-items: center; gap: 6px; color: var(--ink-soft); }
+.field-tip { font-style: normal; color: var(--muted); font-size: 11px; font-weight: 400; }
+.repeat-toggle { color: var(--ink-soft); }
+.repeat-box {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 11px 12px;
+}
+.repeat-year-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 8px;
+}
+.repeat-year-nav b {
+  flex: 1;
+  text-align: center;
+  font-size: 13px;
+  color: var(--ink);
+}
+.month-pick {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 7px;
+}
+.month-chip {
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--ink-soft);
+  border-radius: 8px;
+  padding: 7px 0;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: all .15s;
+}
+.month-chip:active { transform: scale(.96); }
+.month-chip.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+.repeat-preview {
+  margin-top: 8px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--ink-soft);
+  max-height: 128px;
+  overflow-y: auto;
+}
+.repeat-preview .repeat-empty { color: var(--muted); }
+.repeat-preview .repeat-sum {
+  margin-top: 4px;
+  border-top: 1px dashed var(--line-strong);
+  padding-top: 4px;
+  color: var(--accent-ink);
+  font-weight: 600;
+}
 
 /* ---------- 导入 ---------- */
 .import-modal { width: 960px; }
@@ -1251,6 +1316,21 @@ var Fr={},Gr={};var Wr,Hr=function(){function t(t,e,n){var i=this;this._sleepAft
     return addDays(iso, -w);
   }
 
+  /** 某年内某月所有指定星期（周一=0，周日=6）的日期列表（ISO） */
+  function weekdayDatesInMonth(year, month, weekday) {
+    if (!year || !month || weekday === null || weekday === undefined) return [];
+    if (weekday < 0 || weekday > 6) return [];
+    const first = makeDate(year, month, 1);
+    if (!first) return [];
+    const daysInMonth = new Date(year, month, 0).getDate();
+    const out = [];
+    for (let d = 1; d <= daysInMonth; d++) {
+      const iso = toISODate(makeDate(year, month, d));
+      if (weekdayFromDate(iso) === weekday) out.push(iso);
+    }
+    return out;
+  }
+
   /** 所在周范围 {start, end}（周一到周日） */
   function getWeekRange(iso) {
     const start = getWeekStart(iso);
@@ -1315,7 +1395,7 @@ var Fr={},Gr={};var Wr,Hr=function(){function t(t,e,n){var i=this;this._sleepAft
     pad2, toISODate, todayISO, addDays, parseISODate, parseDate, parseTime,
     formatMinutes, parseWeekday, weekdayFromDate, weekdayLabel, getWeekStart,
     getWeekRange, monthGrid, dateRange, formatDisplay, formatTitle, monthLabel,
-    WEEKDAY_TEXT
+    weekdayDatesInMonth, WEEKDAY_TEXT
   };
 
   if (typeof module !== 'undefined' && module.exports) {
@@ -2188,6 +2268,18 @@ var Fr={},Gr={};var Wr,Hr=function(){function t(t,e,n){var i=this;this._sleepAft
     return prefix + '_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
   }
 
+  /** ISO 日期加天数（本地时区，避免 UTC 时区漂移） */
+  function addDaysISO(iso, n) {
+    if (typeof iso !== 'string') return null;
+    const m = iso.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+    if (!m) return null;
+    const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]) + n);
+    const y = d.getFullYear();
+    const mon = d.getMonth() + 1;
+    const day = d.getDate();
+    return y + '-' + String(mon).padStart(2, '0') + '-' + String(day).padStart(2, '0');
+  }
+
   function createStore() {
     const store = load();
     return {
@@ -2219,8 +2311,35 @@ var Fr={},Gr={};var Wr,Hr=function(){function t(t,e,n){var i=this;this._sleepAft
         save(store);
         return { events: stamped, store: store };
       },
+      /** 批量新增（重复展开等一次性写入多条时使用，只保存一次） */
+      addEvents(events) {
+        const now = new Date().toISOString();
+        const stamped = events.map(ev => ({
+          id: uid('ev'),
+          createdAt: now,
+          ...ev
+        }));
+        store.events.push(...stamped);
+        save(store);
+        return stamped;
+      },
       addEvent(ev) {
+        // 按月重复：repeatDates 为展开后的日期列表，逐条生成事件（跨天结束日按每条日期重算）
+        if (Array.isArray(ev.repeatDates) && ev.repeatDates.length) {
+          const base = { ...ev };
+          delete base.repeatDates;
+          const instances = ev.repeatDates.map(d => {
+            const item = { ...base, date: d };
+            if (!item.allDay && item.startTime && item.endTime && item.endTime < item.startTime) {
+              item.crossDay = true;
+              item.endDate = addDaysISO(d, 1);
+            }
+            return item;
+          });
+          return this.addEvents(instances);
+        }
         const item = { id: uid('ev'), createdAt: new Date().toISOString(), ...ev };
+        delete item.repeatDates;
         store.events.push(item);
         save(store);
         return item;
@@ -2525,26 +2644,75 @@ var Fr={},Gr={};var Wr,Hr=function(){function t(t,e,n){var i=this;this._sleepAft
 </script>
   <script>
 /**
- * 事件新增 / 编辑弹窗。
+ * 事件新增 / 编辑弹窗；新增时支持「按月重复」：选择星期几与多个月份后，
+ * 一次生成该月内每周对应星期的事件。
  */
 (function (global) {
   'use strict';
 
   const D = global.WS.dateutil;
 
+  function pad2(n) {
+    return n < 10 ? '0' + n : String(n);
+  }
+
+  function monthKey(year, month) {
+    return year + '-' + pad2(month);
+  }
+
   function openEventForm(opts) {
     const { date, event, onSave } = opts;
     const isEdit = !!event;
+    const baseDate = (event && event.date) || date || D.todayISO();
+    const baseYear = Number(baseDate.slice(0, 4)) || new Date().getFullYear();
+    let year = baseYear;
+    const selectedMonths = new Set();
+    const defaultWeekday = D.weekdayFromDate(baseDate);
+    const defaultWeekdaySafe = defaultWeekday === null ? 0 : defaultWeekday;
+
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
     overlay.innerHTML = `
       <div class="modal event-modal" role="dialog" aria-modal="true">
         <h3 class="modal-title">${isEdit ? '编辑事件' : '新增事件'}</h3>
         <form class="event-form">
+          ${isEdit ? `
           <label class="field">
             <span>日期 *</span>
-            <input type="date" name="date" required value="${isEdit ? event.date : date}">
+            <input type="date" name="date" required value="${event.date}">
+          </label>` : `
+          <label class="field" data-role="single-date">
+            <span>日期 * <em class="field-tip">选「按月重复」后将按下方规则生成</em></span>
+            <input type="date" name="date" required value="${date}">
           </label>
+          <label class="field field-check repeat-toggle">
+            <input type="checkbox" data-role="repeat-check">
+            <span>按月重复：所选月份内每个指定星期都记录</span>
+          </label>
+          <div class="repeat-box" data-role="repeat-box" hidden>
+            <label class="field">
+              <span>每周星期几</span>
+              <select data-role="repeat-weekday">
+                <option value="0"${defaultWeekdaySafe === 0 ? ' selected' : ''}>周一</option>
+                <option value="1"${defaultWeekdaySafe === 1 ? ' selected' : ''}>周二</option>
+                <option value="2"${defaultWeekdaySafe === 2 ? ' selected' : ''}>周三</option>
+                <option value="3"${defaultWeekdaySafe === 3 ? ' selected' : ''}>周四</option>
+                <option value="4"${defaultWeekdaySafe === 4 ? ' selected' : ''}>周五</option>
+                <option value="5"${defaultWeekdaySafe === 5 ? ' selected' : ''}>周六</option>
+                <option value="6"${defaultWeekdaySafe === 6 ? ' selected' : ''}>周日</option>
+              </select>
+            </label>
+            <div class="field">
+              <span>选择月份（可多选，支持切换年份）</span>
+              <div class="repeat-year-nav">
+                <button type="button" class="btn btn-ghost btn-sm" data-role="year-prev" title="上一年">‹</button>
+                <b data-role="year-label"></b>
+                <button type="button" class="btn btn-ghost btn-sm" data-role="year-next" title="下一年">›</button>
+              </div>
+              <div class="month-pick" data-role="month-grid"></div>
+              <div class="repeat-preview" data-role="repeat-preview">勾选后请选择月份</div>
+            </div>
+          </div>`}
           <label class="field field-check">
             <input type="checkbox" name="allDay" ${isEdit && event.allDay ? 'checked' : ''}>
             <span>全天事件</span>
@@ -2589,6 +2757,104 @@ var Fr={},Gr={};var Wr,Hr=function(){function t(t,e,n){var i=this;this._sleepAft
       if (e.target === overlay) close();
     });
     overlay.querySelector('[data-act="cancel"]').addEventListener('click', close);
+
+    // 按月重复（仅新增时提供；编辑仍按单条日期处理）
+    let repeatApi = null;
+    if (!isEdit) {
+      const repeatCheck = overlay.querySelector('[data-role="repeat-check"]');
+      const repeatBox = overlay.querySelector('[data-role="repeat-box"]');
+      const singleDate = overlay.querySelector('[data-role="single-date"]');
+      const dateInput = overlay.querySelector('input[name="date"]');
+      const weekdaySel = overlay.querySelector('[data-role="repeat-weekday"]');
+      const yearLabel = overlay.querySelector('[data-role="year-label"]');
+      const monthGrid = overlay.querySelector('[data-role="month-grid"]');
+      const previewEl = overlay.querySelector('[data-role="repeat-preview"]');
+      const submitBtn = overlay.querySelector('.event-modal button[type="submit"]');
+
+      function renderMonthGrid() {
+        yearLabel.textContent = year + '年';
+        monthGrid.innerHTML = '';
+        for (let m = 1; m <= 12; m++) {
+          const key = monthKey(year, m);
+          const chip = document.createElement('button');
+          chip.type = 'button';
+          chip.className = 'month-chip' + (selectedMonths.has(key) ? ' active' : '');
+          chip.dataset.month = String(m);
+          chip.textContent = m + '月';
+          monthGrid.appendChild(chip);
+        }
+      }
+
+      function collectDates() {
+        if (!repeatCheck.checked) return [];
+        const wd = Number(weekdaySel.value);
+        const out = [];
+        Array.from(selectedMonths).sort().forEach(key => {
+          const y = Number(key.slice(0, 4));
+          const m = Number(key.slice(5, 7));
+          out.push(...D.weekdayDatesInMonth(y, m, wd));
+        });
+        return out;
+      }
+
+      function renderPreview() {
+        if (!repeatCheck.checked) return;
+        const dates = collectDates();
+        if (!dates.length) {
+          previewEl.innerHTML = '<div class="repeat-empty">请先选择月份</div>';
+          submitBtn.textContent = '添加事件';
+          return;
+        }
+        const wdText = '周' + D.WEEKDAY_TEXT[Number(weekdaySel.value)];
+        const byMonth = new Map();
+        dates.forEach(iso => {
+          const key = iso.slice(0, 7);
+          if (!byMonth.has(key)) byMonth.set(key, []);
+          byMonth.get(key).push(Number(iso.slice(8, 10)) + '日');
+        });
+        const lines = [];
+        byMonth.forEach((days, key) => {
+          const y = Number(key.slice(0, 4));
+          const m = Number(key.slice(5, 7));
+          lines.push('<div>' + D.monthLabel(y, m) + ' 每周' + wdText + '：' + days.join('、') + '（' + days.length + '天）</div>');
+        });
+        lines.push('<div class="repeat-sum">合计 ' + dates.length + ' 条事件，保存后逐日生成</div>');
+        previewEl.innerHTML = lines.join('');
+        submitBtn.textContent = '添加事件（共 ' + dates.length + ' 条）';
+      }
+
+      monthGrid.addEventListener('click', e => {
+        const chip = e.target.closest('.month-chip');
+        if (!chip) return;
+        const key = monthKey(year, Number(chip.dataset.month));
+        if (selectedMonths.has(key)) {
+          selectedMonths.delete(key);
+        } else {
+          selectedMonths.add(key);
+        }
+        chip.classList.toggle('active');
+        renderPreview();
+      });
+      overlay.querySelector('[data-role="year-prev"]').addEventListener('click', () => {
+        year--;
+        renderMonthGrid();
+      });
+      overlay.querySelector('[data-role="year-next"]').addEventListener('click', () => {
+        year++;
+        renderMonthGrid();
+      });
+      weekdaySel.addEventListener('change', renderPreview);
+      repeatCheck.addEventListener('change', () => {
+        const on = repeatCheck.checked;
+        repeatBox.hidden = !on;
+        singleDate.hidden = on;
+        dateInput.disabled = on;
+        if (on) renderPreview();
+      });
+      renderMonthGrid();
+      repeatApi = { repeatCheck, collectDates };
+    }
+
     overlay.querySelector('form').addEventListener('submit', e => {
       e.preventDefault();
       const f = e.currentTarget;
@@ -2630,8 +2896,34 @@ var Fr={},Gr={};var Wr,Hr=function(){function t(t,e,n){var i=this;this._sleepAft
           data.endDate = undefined;
         }
       }
-      onSave(data);
-      close();
+
+      if (repeatApi && repeatApi.repeatCheck.checked) {
+        const dates = repeatApi.collectDates();
+        if (!dates.length) {
+          global.WS.toast.showToast('请至少选择一个月份', 'error');
+          return;
+        }
+        data.date = dates[0];
+        data.repeatDates = dates;
+      }
+
+      const doSave = () => {
+        onSave(data);
+        close();
+      };
+      const count = Array.isArray(data.repeatDates) ? data.repeatDates.length : 0;
+      if (count > 8) {
+        global.WS.toast.confirmDialog({
+          title: '确认批量添加',
+          message: `将同时添加 ${count} 条事件，从 ${D.formatTitle(data.repeatDates[0])} 开始逐日生成。是否继续？`,
+          confirmText: '添加',
+          danger: false
+        }).then(ok => {
+          if (ok) doSave();
+        });
+      } else {
+        doSave();
+      }
     });
     document.body.appendChild(overlay);
     overlay.querySelector('input[name="title"]').focus();
@@ -2836,9 +3128,14 @@ var Fr={},Gr={};var Wr,Hr=function(){function t(t,e,n){var i=this;this._sleepAft
       openEventForm({
         date,
         onSave: data => {
-          store.addEvent(data);
-          showToast('事件已添加', 'success');
-          jumpToEventDate(data.date);
+          const saved = store.addEvent(data);
+          if (Array.isArray(saved)) {
+            showToast('已添加 ' + saved.length + ' 条事件', 'success');
+            jumpToEventDate(saved[0].date);
+          } else {
+            showToast('事件已添加', 'success');
+            jumpToEventDate(saved.date);
+          }
         }
       });
     });
@@ -4486,11 +4783,20 @@ var Fr={},Gr={};var Wr,Hr=function(){function t(t,e,n){var i=this;this._sleepAft
     global.WS.eventform.openEventForm({
       date: fabDate(),
       onSave: data => {
-        storeApi.addEvent(data);
-        global.WS.toast.showToast('事件已添加', 'success');
-        if (data.date !== app.state.selected) {
-          app.state.selected = data.date;
-          app.state.anchor = data.date;
+        const saved = storeApi.addEvent(data);
+        if (Array.isArray(saved)) {
+          global.WS.toast.showToast('已添加 ' + saved.length + ' 条事件', 'success');
+          const firstDate = saved[0].date;
+          if (firstDate !== app.state.selected) {
+            app.state.selected = firstDate;
+            app.state.anchor = firstDate;
+          }
+        } else {
+          global.WS.toast.showToast('事件已添加', 'success');
+          if (saved.date !== app.state.selected) {
+            app.state.selected = saved.date;
+            app.state.anchor = saved.date;
+          }
         }
         app.refresh();
       }

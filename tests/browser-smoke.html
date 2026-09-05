@@ -406,6 +406,29 @@
         const fabFormCancel = document.querySelector('.event-modal [data-act="cancel"]');
         if (fabFormCancel) fabFormCancel.click();
 
+        // 新增事件：按月重复，所选月份每周一逐日展开
+        document.getElementById('btnFabEvent').click();
+        await new Promise(r => setTimeout(r, 100));
+        const repModal = document.querySelector('.event-modal');
+        repModal.querySelector('[name="title"]').value = '重复班会';
+        repModal.querySelector('[name="startTime"]').value = '14:15';
+        repModal.querySelector('[data-role="repeat-check"]').click();
+        await new Promise(r => setTimeout(r, 60));
+        const repWeekday = repModal.querySelector('[data-role="repeat-weekday"]');
+        repWeekday.value = '0';
+        repWeekday.dispatchEvent(new Event('change'));
+        repModal.querySelector('.month-pick [data-month="9"]').click();
+        repModal.querySelector('.month-pick [data-month="10"]').click();
+        await new Promise(r => setTimeout(r, 60));
+        const repPreview = repModal.querySelector('[data-role="repeat-preview"]');
+        log(!!repPreview && repPreview.textContent.includes('合计 8 条'), '多选 9/10 月预览每周一共 8 条（' + (repPreview ? repPreview.textContent : '无') + '）');
+        repModal.querySelector('button[type="submit"]').click();
+        await new Promise(r => setTimeout(r, 250));
+        const repeatEvents = store.state.events.filter(e => e.title === '重复班会');
+        log(repeatEvents.length === 8 && repeatEvents.every(e => ['2026-09-07', '2026-09-14', '2026-09-21', '2026-09-28', '2026-10-05', '2026-10-12', '2026-10-19', '2026-10-26'].includes(e.date)), '多月重复生成 9/10 月每周一 8 条（实际 ' + repeatEvents.length + '）');
+        repeatEvents.forEach(e => store.deleteEvent(e.id));
+        app.refresh();
+
         // 左滑删除批注 + 二次确认
         const sep31b = grid.querySelector('[data-date="2026-08-31"]');
         sep31b.click();

@@ -63,6 +63,9 @@ eq(D.getWeekRange('2026-09-02').end, '2026-09-06', 'getWeekRange end');
 eq(D.monthGrid(2026, 8).length, 6, '2026-08 六周网格');
 eq(D.monthGrid(2026, 8)[0][0], '2026-07-27', '2026-08 网格首日（周一）');
 eq(D.dateRange('2026-08-31', '2026-09-02'), ['2026-08-31', '2026-09-01', '2026-09-02'], 'dateRange');
+eq(D.weekdayDatesInMonth(2026, 9, 0), ['2026-09-07', '2026-09-14', '2026-09-21', '2026-09-28'], 'weekdayDatesInMonth 9月每周一');
+eq(D.weekdayDatesInMonth(2026, 8, 6), ['2026-08-02', '2026-08-09', '2026-08-16', '2026-08-23', '2026-08-30'], 'weekdayDatesInMonth 8月每周日');
+eq(D.weekdayDatesInMonth(2026, 13, 0), [], 'weekdayDatesInMonth 非法月份空');
 
 console.log('== aliases ==');
 eq(AL.detectField('事项名称'), 'title', '别名 事项名称');
@@ -202,6 +205,30 @@ store.deleteEvent(ev.id);
 eq(store.state.events.length, 0, 'deleteEvent');
 const json = JSON.parse(store.exportJSON());
 eq(Array.isArray(json.events), true, 'exportJSON 结构');
+
+console.log('== store: 按月重复展开 ==');
+const s3 = STORE.createStore();
+s3.clearAll();
+const reps = s3.addEvent({
+  date: '2026-09-07',
+  repeatDates: ['2026-09-07', '2026-09-14', '2026-09-21', '2026-09-28'],
+  startTime: '14:15',
+  endTime: '15:00',
+  allDay: false,
+  title: '每周一班会'
+});
+eq(reps.length, 4, 'repeatDates 展开为 4 条');
+eq(reps.map(e => e.date), ['2026-09-07', '2026-09-14', '2026-09-21', '2026-09-28'], '展开日期为每周一');
+eq(s3.state.events.every(e => !('repeatDates' in e)), true, 'repeatDates 不落库');
+const night = s3.addEvent({
+  date: '2026-09-07',
+  repeatDates: ['2026-09-07', '2026-09-14'],
+  startTime: '23:00',
+  endTime: '00:30',
+  allDay: false,
+  title: '每周一晚值班'
+});
+eq(night.map(e => e.endDate), ['2026-09-08', '2026-09-15'], '重复跨天事件逐条重算 endDate');
 
 console.log('== stats: 区间口径与删除一致性 ==');
 const s2 = STORE.createStore();
