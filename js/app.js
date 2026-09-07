@@ -427,11 +427,20 @@
     global.WS.annoform.openAnnoForm({
       date: fabDate(),
       onSave: data => {
-        storeApi.addAnnotation(data);
-        global.WS.toast.showToast('批注已添加', 'success');
-        if (data.date !== app.state.selected) {
-          app.state.selected = data.date;
-          app.state.anchor = data.date;
+        const saved = storeApi.addAnnotation(data);
+        if (Array.isArray(saved)) {
+          global.WS.toast.showToast('已添加 ' + saved.length + ' 条批注', 'success');
+          const firstDate = saved[0].date;
+          if (firstDate !== app.state.selected) {
+            app.state.selected = firstDate;
+            app.state.anchor = firstDate;
+          }
+        } else {
+          global.WS.toast.showToast('批注已添加', 'success');
+          if (saved.date !== app.state.selected) {
+            app.state.selected = saved.date;
+            app.state.anchor = saved.date;
+          }
         }
         app.refresh();
       }

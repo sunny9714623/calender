@@ -212,6 +212,8 @@ s3.clearAll();
 const reps = s3.addEvent({
   date: '2026-09-07',
   repeatDates: ['2026-09-07', '2026-09-14', '2026-09-21', '2026-09-28'],
+  repeatWeekday: 0,
+  repeatMonths: ['2026-09'],
   startTime: '14:15',
   endTime: '15:00',
   allDay: false,
@@ -229,6 +231,44 @@ const night = s3.addEvent({
   title: '每周一晚值班'
 });
 eq(night.map(e => e.endDate), ['2026-09-08', '2026-09-15'], '重复跨天事件逐条重算 endDate');
+eq(reps[0].repeatGroupId && reps.every(e => e.repeatGroupId === reps[0].repeatGroupId), true, '重复事件写入同一 repeatGroupId');
+eq(reps[0].repeatWeekday === 0 && JSON.stringify(reps[0].repeatMonths) === JSON.stringify(['2026-09']), true, '重复规则字段写入');
+const annReps = s3.addAnnotation({
+  date: '2026-09-07',
+  repeatDates: ['2026-09-07', '2026-09-14', '2026-09-21', '2026-09-28', '2026-10-05', '2026-10-12', '2026-10-19', '2026-10-26'],
+  repeatWeekday: 0,
+  repeatMonths: ['2026-09', '2026-10'],
+  content: '每周一检查',
+  tags: '例行',
+  priority: 'P1'
+});
+eq(annReps.length, 8, '批注 repeatDates 展开为 8 条');
+eq(annReps.every(a => a.repeatGroupId === annReps[0].repeatGroupId), true, '重复批注写入同一 repeatGroupId');
+const annGroupId = annReps[0].repeatGroupId;
+const annSync = s3.syncAnnotationGroup(annGroupId, {
+  content: '修改后的例行检查',
+  tags: '例行,重要',
+  priority: 'P2',
+  repeatWeekday: 0,
+  repeatMonths: ['2026-09']
+}, ['2026-09-07', '2026-09-14', '2026-09-21', '2026-09-28']);
+eq(annSync.total, 4, '批注整组收缩到 4 条');
+eq(annSync.removed, 4, '批注整组移除 4 条旧日期');
+eq(annSync.added, 0, '批注整组无新增');
+eq(s3.state.annotations.filter(a => a.repeatGroupId === annGroupId).every(a => a.content === '修改后的例行检查' && a.priority === 'P2'), true, '整组批注内容同步修改');
+const evGroupId = reps[0].repeatGroupId;
+const evSync = s3.syncEventGroup(evGroupId, {
+  title: '班会改到九月十月',
+  repeatWeekday: 0,
+  repeatMonths: ['2026-09', '2026-10'],
+  allDay: true
+}, ['2026-09-07', '2026-09-14', '2026-09-21', '2026-09-28', '2026-10-05', '2026-10-12', '2026-10-19', '2026-10-26']);
+eq(evSync.total, 8, '事件整组扩展到 8 条');
+eq(evSync.added, 4, '事件整组新增 4 条');
+eq(s3.state.events.filter(e => e.repeatGroupId === evGroupId).every(e => e.title === '班会改到九月十月' && e.allDay === true), true, '整组事件内容同步修改');
+const unlinked = s3.state.events.find(e => e.repeatGroupId === evGroupId);
+s3.unlinkEvent(unlinked.id);
+eq(s3.state.events.find(e => e.id === unlinked.id).repeatGroupId === undefined, true, '单条事件可解除重复关联');
 
 console.log('== stats: 区间口径与删除一致性 ==');
 const s2 = STORE.createStore();

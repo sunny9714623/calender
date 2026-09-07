@@ -601,8 +601,15 @@ textarea { resize: vertical; }
 /* ---------- 批注 ---------- */
 .anno-form { margin-bottom: 12px; display: flex; flex-direction: column; gap: 7px; }
 .anno-form textarea { width: 100%; }
-.anno-form-row { display: flex; gap: 6px; }
+.anno-form-row { display: flex; gap: 6px; flex-wrap: wrap; }
 .anno-form-row input { flex: 1; min-width: 0; }
+.anno-repeat-chk {
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: var(--accent-ink);
+  white-space: nowrap;
+}
+.anno-repeat-chk input { flex: 0 0 auto; }
 .anno-list { display: flex; flex-direction: column; gap: 8px; }
 .anno-item {
   position: relative;
@@ -2280,8 +2287,61 @@ var Fr={},Gr={};var Wr,Hr=function(){function t(t,e,n){var i=this;this._sleepAft
     return y + '-' + String(mon).padStart(2, '0') + '-' + String(day).padStart(2, '0');
   }
 
+  /** ISO 日期 -> 星期（周一=0） */
+  function weekdayOfISO(iso) {
+    if (typeof iso !== 'string') return -1;
+    const m = iso.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+    if (!m) return -1;
+    const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    return (d.getDay() + 6) % 7;
+  }
+
+  /**
+   * 旧数据迁移：此前按月重复展开的事件/批注没有组标记。
+   * 手动新增（无 sourceRow）且内容完全一致、日期都在同一星期的条目，按重复组补上组标记。
+   */
+  function assignLegacyRepeatGroups(store) {
+    const eventKey = ev => JSON.stringify([
+      ev.title || '', ev.allDay ? 1 : 0, ev.startTime || '', ev.endTime || '',
+      ev.location || '', ev.owner || '', ev.description || ''
+    ]);
+    const annoKey = an => JSON.stringify([an.content || '', an.tags || '', an.priority || '']);
+    let changed = false;
+
+    const migrate = (list, keyFn, uidPrefix) => {
+      const clusters = new Map();
+      for (const item of list) {
+        if (item.repeatGroupId || item.sourceRow) continue;
+        const wd = weekdayOfISO(item.date);
+        if (wd < 0) continue;
+        const key = keyFn(item) + '|' + wd;
+        if (!clusters.has(key)) clusters.set(key, []);
+        clusters.get(key).push(item);
+      }
+      clusters.forEach(items => {
+        if (items.length < 2) return;
+        const dates = Array.from(new Set(items.map(x => x.date))).sort();
+        if (dates.length < 2) return;
+        const months = Array.from(new Set(dates.map(d => d.slice(0, 7)))).sort();
+        const groupId = uid(uidPrefix);
+        const wd = weekdayOfISO(dates[0]);
+        items.forEach(item => {
+          item.repeatGroupId = groupId;
+          item.repeatWeekday = wd;
+          item.repeatMonths = months.slice();
+        });
+        changed = true;
+      });
+    };
+
+    migrate(store.events, eventKey, 'rg');
+    migrate(store.annotations, annoKey, 'rg');
+    return changed;
+  }
+
   function createStore() {
     const store = load();
+    if (assignLegacyRepeatGroups(store)) save(store);
     return {
       get state() { return store; },
       save() { save(store); },
@@ -2323,13 +2383,31 @@ var Fr={},Gr={};var Wr,Hr=function(){function t(t,e,n){var i=this;this._sleepAft
         save(store);
         return stamped;
       },
+      /** 批量新增批注（按月重复展开等一次性写入多条时使用） */
+      addAnnotations(annotations) {
+        const now = new Date().toISOString();
+        const stamped = annotations.map(an => ({
+          id: uid('an'),
+          createdAt: now,
+          author: '',
+          priority: '',
+          tags: '',
+          ...an
+        }));
+        store.annotations.push(...stamped);
+        save(store);
+        return stamped;
+      },
       addEvent(ev) {
-        // 按月重复：repeatDates 为展开后的日期列表，逐条生成事件（跨天结束日按每条日期重算）
+        // 按月重复：repeatDates 为展开后的日期列表；同组事件带 repeatGroupId 便于整组修改
         if (Array.isArray(ev.repeatDates) && ev.repeatDates.length) {
           const base = { ...ev };
           delete base.repeatDates;
+          const groupId = base.repeatGroupId || uid('rg');
           const instances = ev.repeatDates.map(d => {
-            const item = { ...base, date: d };
+            const item = { ...base, date: d, repeatGroupId: groupId };
+            if (base.repeatWeekday !== undefined) item.repeatWeekday = base.repeatWeekday;
+            if (Array.isArray(base.repeatMonths)) item.repeatMonths = base.repeatMonths.slice();
             if (!item.allDay && item.startTime && item.endTime && item.endTime < item.startTime) {
               item.crossDay = true;
               item.endDate = addDaysISO(d, 1);
@@ -2343,6 +2421,65 @@ var Fr={},Gr={};var Wr,Hr=function(){function t(t,e,n){var i=this;this._sleepAft
         store.events.push(item);
         save(store);
         return item;
+      },
+      /** 整组重算：按目标日期保留/更新/新增事件，移除不再属于该组的日期 */
+      syncEventGroup(groupId, patch, targetDates) {
+        const now = new Date().toISOString();
+        const target = Array.from(targetDates || []).sort();
+        const old = store.events.filter(e => e.repeatGroupId === groupId);
+        const exemplar = old[0] || null;
+        const byDate = new Map(old.map(e => [e.date, e]));
+        store.events = store.events.filter(e => e.repeatGroupId !== groupId);
+        const added = [];
+        const updated = [];
+        const items = target.map(date => {
+          const prev = byDate.get(date);
+          const next = prev
+            ? { ...prev, ...patch, updatedAt: now }
+            : { ...(exemplar || patch), ...patch, id: uid('ev'), createdAt: now };
+          delete next.repeatDates;
+          next.date = date;
+          next.repeatGroupId = groupId;
+          if (patch.repeatWeekday !== undefined) next.repeatWeekday = patch.repeatWeekday;
+          if (Array.isArray(patch.repeatMonths)) next.repeatMonths = patch.repeatMonths.slice();
+          if (next.allDay) {
+            next.startTime = '';
+            next.endTime = '';
+            next.crossDay = false;
+            next.endDate = undefined;
+          } else if (!next.allDay && next.startTime && next.endTime && next.endTime < next.startTime) {
+            next.crossDay = true;
+            next.endDate = addDaysISO(date, 1);
+          } else {
+            next.crossDay = false;
+            next.endDate = undefined;
+          }
+          if (prev) {
+            updated.push(next);
+          } else {
+            delete next.updatedAt;
+            added.push(next);
+          }
+          return next;
+        });
+        store.events = store.events.concat(items);
+        save(store);
+        return {
+          total: items.length,
+          added: added.length,
+          updated: updated.length,
+          removed: Math.max(0, old.length - updated.length)
+        };
+      },
+      /** 解除事件的重复组关联（改为普通单条事件） */
+      unlinkEvent(id) {
+        const idx = store.events.findIndex(e => e.id === id);
+        if (idx === -1) return null;
+        delete store.events[idx].repeatGroupId;
+        delete store.events[idx].repeatWeekday;
+        delete store.events[idx].repeatMonths;
+        save(store);
+        return store.events[idx];
       },
       updateEvent(id, patch) {
         const idx = store.events.findIndex(e => e.id === id);
@@ -2359,6 +2496,19 @@ var Fr={},Gr={};var Wr,Hr=function(){function t(t,e,n){var i=this;this._sleepAft
         return store.events.filter(e => e.date === date || (e.crossDay && e.endDate === date));
       },
       addAnnotation(an) {
+        // 按月重复：repeatDates 为展开后的日期列表；同组批注带 repeatGroupId 便于整组修改
+        if (Array.isArray(an.repeatDates) && an.repeatDates.length) {
+          const base = { ...an };
+          delete base.repeatDates;
+          const groupId = base.repeatGroupId || uid('rg');
+          const instances = an.repeatDates.map(date => {
+            const item = { ...base, date, repeatGroupId: groupId };
+            if (base.repeatWeekday !== undefined) item.repeatWeekday = base.repeatWeekday;
+            if (Array.isArray(base.repeatMonths)) item.repeatMonths = base.repeatMonths.slice();
+            return item;
+          });
+          return this.addAnnotations(instances);
+        }
         const item = {
           id: uid('an'),
           createdAt: new Date().toISOString(),
@@ -2367,9 +2517,57 @@ var Fr={},Gr={};var Wr,Hr=function(){function t(t,e,n){var i=this;this._sleepAft
           tags: '',
           ...an
         };
+        delete item.repeatDates;
         store.annotations.push(item);
         save(store);
         return item;
+      },
+      /** 整组重算：按目标日期保留/更新/新增批注，移除不再属于该组的日期 */
+      syncAnnotationGroup(groupId, patch, targetDates) {
+        const now = new Date().toISOString();
+        const target = Array.from(targetDates || []).sort();
+        const old = store.annotations.filter(a => a.repeatGroupId === groupId);
+        const exemplar = old[0] || null;
+        const byDate = new Map(old.map(a => [a.date, a]));
+        store.annotations = store.annotations.filter(a => a.repeatGroupId !== groupId);
+        const added = [];
+        const updated = [];
+        const items = target.map(date => {
+          const prev = byDate.get(date);
+          const next = prev
+            ? { ...prev, ...patch, updatedAt: now }
+            : { ...(exemplar || patch), ...patch, id: uid('an'), createdAt: now };
+          delete next.repeatDates;
+          next.date = date;
+          next.repeatGroupId = groupId;
+          if (patch.repeatWeekday !== undefined) next.repeatWeekday = patch.repeatWeekday;
+          if (Array.isArray(patch.repeatMonths)) next.repeatMonths = patch.repeatMonths.slice();
+          if (prev) {
+            updated.push(next);
+          } else {
+            delete next.updatedAt;
+            added.push(next);
+          }
+          return next;
+        });
+        store.annotations = store.annotations.concat(items);
+        save(store);
+        return {
+          total: items.length,
+          added: added.length,
+          updated: updated.length,
+          removed: Math.max(0, old.length - updated.length)
+        };
+      },
+      /** 解除批注的重复组关联（改为普通单条批注） */
+      unlinkAnnotation(id) {
+        const idx = store.annotations.findIndex(a => a.id === id);
+        if (idx === -1) return null;
+        delete store.annotations[idx].repeatGroupId;
+        delete store.annotations[idx].repeatWeekday;
+        delete store.annotations[idx].repeatMonths;
+        save(store);
+        return store.annotations[idx];
       },
       updateAnnotation(id, patch) {
         const idx = store.annotations.findIndex(a => a.id === id);
@@ -2644,8 +2842,8 @@ var Fr={},Gr={};var Wr,Hr=function(){function t(t,e,n){var i=this;this._sleepAft
 </script>
   <script>
 /**
- * 事件新增 / 编辑弹窗；新增时支持「按月重复」：选择星期几与多个月份后，
- * 一次生成该月内每周对应星期的事件。
+ * 按月重复选择组件（事件 / 批注共用）：
+ * 勾选后选择星期几与多个月份，实时预览生成日期列表。
  */
 (function (global) {
   'use strict';
@@ -2660,59 +2858,193 @@ var Fr={},Gr={};var Wr,Hr=function(){function t(t,e,n){var i=this;this._sleepAft
     return year + '-' + pad2(month);
   }
 
+  function createRepeatRule(el, opts) {
+    opts = opts || {};
+    const baseDate = opts.baseDate || D.todayISO();
+    const seedWeekday = opts.weekday === null || opts.weekday === undefined
+      ? D.weekdayFromDate(baseDate)
+      : opts.weekday;
+    const weekdaySeed = seedWeekday === null ? 0 : seedWeekday;
+    const selectedMonths = new Set((opts.months || []).map(String));
+    let year = Number(baseDate.slice(0, 4)) || new Date().getFullYear();
+    const checkedSeed = !!opts.checked;
+
+    el.classList.add('repeat-rule');
+    el.innerHTML = `
+      <label class="field field-check repeat-toggle">
+        <input type="checkbox" data-role="repeat-check"${checkedSeed ? ' checked' : ''}>
+        <span>按月重复：所选月份内每个指定星期都记录</span>
+      </label>
+      <div class="repeat-box" data-role="repeat-box"${checkedSeed ? '' : ' hidden'}>
+        <label class="field">
+          <span>每周星期几</span>
+          <select data-role="repeat-weekday">
+            <option value="0"${weekdaySeed === 0 ? ' selected' : ''}>周一</option>
+            <option value="1"${weekdaySeed === 1 ? ' selected' : ''}>周二</option>
+            <option value="2"${weekdaySeed === 2 ? ' selected' : ''}>周三</option>
+            <option value="3"${weekdaySeed === 3 ? ' selected' : ''}>周四</option>
+            <option value="4"${weekdaySeed === 4 ? ' selected' : ''}>周五</option>
+            <option value="5"${weekdaySeed === 5 ? ' selected' : ''}>周六</option>
+            <option value="6"${weekdaySeed === 6 ? ' selected' : ''}>周日</option>
+          </select>
+        </label>
+        <div class="field">
+          <span>选择月份（可多选，支持切换年份）</span>
+          <div class="repeat-year-nav">
+            <button type="button" class="btn btn-ghost btn-sm" data-role="year-prev" title="上一年">‹</button>
+            <b data-role="year-label"></b>
+            <button type="button" class="btn btn-ghost btn-sm" data-role="year-next" title="下一年">›</button>
+          </div>
+          <div class="month-pick" data-role="month-grid"></div>
+          <div class="repeat-preview" data-role="repeat-preview">勾选后请选择月份</div>
+        </div>
+      </div>`;
+
+    const checkbox = el.querySelector('[data-role="repeat-check"]');
+    const box = el.querySelector('[data-role="repeat-box"]');
+    const weekdaySel = el.querySelector('[data-role="repeat-weekday"]');
+    const yearLabel = el.querySelector('[data-role="year-label"]');
+    const monthGrid = el.querySelector('[data-role="month-grid"]');
+    const previewEl = el.querySelector('[data-role="repeat-preview"]');
+
+    function renderMonthGrid() {
+      yearLabel.textContent = year + '年';
+      monthGrid.innerHTML = '';
+      for (let m = 1; m <= 12; m++) {
+        const key = monthKey(year, m);
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'month-chip' + (selectedMonths.has(key) ? ' active' : '');
+        chip.dataset.month = String(m);
+        chip.textContent = m + '月';
+        monthGrid.appendChild(chip);
+      }
+    }
+
+    function renderPreview() {
+      if (!checkbox.checked) return;
+      const ds = dates();
+      if (!ds.length) {
+        previewEl.innerHTML = '<div class="repeat-empty">请先选择月份</div>';
+        return;
+      }
+      const wdText = '周' + D.WEEKDAY_TEXT[Number(weekdaySel.value)];
+      const byMonth = new Map();
+      ds.forEach(iso => {
+        const key = iso.slice(0, 7);
+        if (!byMonth.has(key)) byMonth.set(key, []);
+        byMonth.get(key).push(Number(iso.slice(8, 10)) + '日');
+      });
+      const lines = [];
+      byMonth.forEach((days, key) => {
+        const y = Number(key.slice(0, 4));
+        const m = Number(key.slice(5, 7));
+        lines.push('<div>' + D.monthLabel(y, m) + ' 每周' + wdText + '：' + days.join('、') + '（' + days.length + '天）</div>');
+      });
+      lines.push('<div class="repeat-sum">合计 ' + ds.length + ' 条，保存后逐日生成</div>');
+      previewEl.innerHTML = lines.join('');
+    }
+
+    function dates() {
+      if (!checkbox.checked) return [];
+      const wd = Number(weekdaySel.value);
+      const out = [];
+      Array.from(selectedMonths).sort().forEach(key => {
+        const y = Number(key.slice(0, 4));
+        const m = Number(key.slice(5, 7));
+        out.push(...D.weekdayDatesInMonth(y, m, wd));
+      });
+      return out;
+    }
+
+    monthGrid.addEventListener('click', e => {
+      const chip = e.target.closest('.month-chip');
+      if (!chip) return;
+      const key = monthKey(year, Number(chip.dataset.month));
+      if (selectedMonths.has(key)) {
+        selectedMonths.delete(key);
+      } else {
+        selectedMonths.add(key);
+      }
+      chip.classList.toggle('active');
+      renderPreview();
+    });
+    el.querySelector('[data-role="year-prev"]').addEventListener('click', () => {
+      year--;
+      renderMonthGrid();
+    });
+    el.querySelector('[data-role="year-next"]').addEventListener('click', () => {
+      year++;
+      renderMonthGrid();
+    });
+    weekdaySel.addEventListener('change', renderPreview);
+    checkbox.addEventListener('change', () => {
+      box.hidden = !checkbox.checked;
+      if (checkbox.checked) renderPreview();
+      if (opts.onToggle) opts.onToggle(checkbox.checked);
+    });
+
+    renderMonthGrid();
+    if (checkedSeed) renderPreview();
+
+    return {
+      element: el,
+      checked() { return checkbox.checked; },
+      weekday() { return Number(weekdaySel.value); },
+      months() { return Array.from(selectedMonths).sort(); },
+      dates,
+      setEnabled(on) {
+        checkbox.checked = !!on;
+        box.hidden = !checkbox.checked;
+        if (checkbox.checked) renderPreview();
+        if (opts.onToggle) opts.onToggle(checkbox.checked);
+      }
+    };
+  }
+
+  global.WS = global.WS || {};
+  global.WS.repeatrule = { createRepeatRule };
+})(window);
+
+</script>
+  <script>
+/**
+ * 事件新增 / 编辑弹窗。
+ * - 新增支持「按月重复」（星期几 + 多月 → 逐日生成）；
+ * - 编辑重复组时可整组修改内容 / 星期 / 月份，或只改当天并解除重复。
+ */
+(function (global) {
+  'use strict';
+
+  const D = global.WS.dateutil;
+
   function openEventForm(opts) {
-    const { date, event, onSave } = opts;
+    const { date, event, onSave, group } = opts;
     const isEdit = !!event;
+    const isGroupEdit = isEdit && !!group;
     const baseDate = (event && event.date) || date || D.todayISO();
-    const baseYear = Number(baseDate.slice(0, 4)) || new Date().getFullYear();
-    let year = baseYear;
-    const selectedMonths = new Set();
-    const defaultWeekday = D.weekdayFromDate(baseDate);
-    const defaultWeekdaySafe = defaultWeekday === null ? 0 : defaultWeekday;
+    const defaultWeekdayRaw = D.weekdayFromDate(baseDate);
+    const defaultWeekday = defaultWeekdayRaw === null ? 0 : defaultWeekdayRaw;
 
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
     overlay.innerHTML = `
       <div class="modal event-modal" role="dialog" aria-modal="true">
-        <h3 class="modal-title">${isEdit ? '编辑事件' : '新增事件'}</h3>
+        <h3 class="modal-title">${isGroupEdit ? '编辑重复事件' : isEdit ? '编辑事件' : '新增事件'}</h3>
         <form class="event-form">
-          ${isEdit ? `
-          <label class="field">
-            <span>日期 *</span>
-            <input type="date" name="date" required value="${event.date}">
-          </label>` : `
           <label class="field" data-role="single-date">
-            <span>日期 * <em class="field-tip">选「按月重复」后将按下方规则生成</em></span>
-            <input type="date" name="date" required value="${date}">
+            <span>日期 * <em class="field-tip">勾选按月重复时按下方规则生成</em></span>
+            <input type="date" name="date" required value="${isEdit ? event.date : date}">
           </label>
-          <label class="field field-check repeat-toggle">
-            <input type="checkbox" data-role="repeat-check">
-            <span>按月重复：所选月份内每个指定星期都记录</span>
-          </label>
-          <div class="repeat-box" data-role="repeat-box" hidden>
-            <label class="field">
-              <span>每周星期几</span>
-              <select data-role="repeat-weekday">
-                <option value="0"${defaultWeekdaySafe === 0 ? ' selected' : ''}>周一</option>
-                <option value="1"${defaultWeekdaySafe === 1 ? ' selected' : ''}>周二</option>
-                <option value="2"${defaultWeekdaySafe === 2 ? ' selected' : ''}>周三</option>
-                <option value="3"${defaultWeekdaySafe === 3 ? ' selected' : ''}>周四</option>
-                <option value="4"${defaultWeekdaySafe === 4 ? ' selected' : ''}>周五</option>
-                <option value="5"${defaultWeekdaySafe === 5 ? ' selected' : ''}>周六</option>
-                <option value="6"${defaultWeekdaySafe === 6 ? ' selected' : ''}>周日</option>
-              </select>
-            </label>
-            <div class="field">
-              <span>选择月份（可多选，支持切换年份）</span>
-              <div class="repeat-year-nav">
-                <button type="button" class="btn btn-ghost btn-sm" data-role="year-prev" title="上一年">‹</button>
-                <b data-role="year-label"></b>
-                <button type="button" class="btn btn-ghost btn-sm" data-role="year-next" title="下一年">›</button>
-              </div>
-              <div class="month-pick" data-role="month-grid"></div>
-              <div class="repeat-preview" data-role="repeat-preview">勾选后请选择月份</div>
-            </div>
-          </div>`}
+          ${isGroupEdit ? `
+          <label class="field">
+            <span>修改范围（重复组共 ${group.count} 条）</span>
+            <select data-role="edit-scope">
+              <option value="group">修改全部：内容 + 星期 + 月份</option>
+              <option value="one">仅修改这一条（解除重复）</option>
+            </select>
+          </label>` : ''}
+          <div data-role="repeat-root"></div>
           <label class="field field-check">
             <input type="checkbox" name="allDay" ${isEdit && event.allDay ? 'checked' : ''}>
             <span>全天事件</span>
@@ -2758,120 +3090,50 @@ var Fr={},Gr={};var Wr,Hr=function(){function t(t,e,n){var i=this;this._sleepAft
     });
     overlay.querySelector('[data-act="cancel"]').addEventListener('click', close);
 
-    // 按月重复（仅新增时提供；编辑仍按单条日期处理）
-    let repeatApi = null;
-    if (!isEdit) {
-      const repeatCheck = overlay.querySelector('[data-role="repeat-check"]');
-      const repeatBox = overlay.querySelector('[data-role="repeat-box"]');
-      const singleDate = overlay.querySelector('[data-role="single-date"]');
-      const dateInput = overlay.querySelector('input[name="date"]');
-      const weekdaySel = overlay.querySelector('[data-role="repeat-weekday"]');
-      const yearLabel = overlay.querySelector('[data-role="year-label"]');
-      const monthGrid = overlay.querySelector('[data-role="month-grid"]');
-      const previewEl = overlay.querySelector('[data-role="repeat-preview"]');
-      const submitBtn = overlay.querySelector('.event-modal button[type="submit"]');
+    const q = sel => overlay.querySelector(sel);
+    const singleDate = q('[data-role="single-date"]');
+    const dateInput = q('input[name="date"]');
+    let rule = null;
 
-      function renderMonthGrid() {
-        yearLabel.textContent = year + '年';
-        monthGrid.innerHTML = '';
-        for (let m = 1; m <= 12; m++) {
-          const key = monthKey(year, m);
-          const chip = document.createElement('button');
-          chip.type = 'button';
-          chip.className = 'month-chip' + (selectedMonths.has(key) ? ' active' : '');
-          chip.dataset.month = String(m);
-          chip.textContent = m + '月';
-          monthGrid.appendChild(chip);
-        }
-      }
-
-      function collectDates() {
-        if (!repeatCheck.checked) return [];
-        const wd = Number(weekdaySel.value);
-        const out = [];
-        Array.from(selectedMonths).sort().forEach(key => {
-          const y = Number(key.slice(0, 4));
-          const m = Number(key.slice(5, 7));
-          out.push(...D.weekdayDatesInMonth(y, m, wd));
-        });
-        return out;
-      }
-
-      function renderPreview() {
-        if (!repeatCheck.checked) return;
-        const dates = collectDates();
-        if (!dates.length) {
-          previewEl.innerHTML = '<div class="repeat-empty">请先选择月份</div>';
-          submitBtn.textContent = '添加事件';
-          return;
-        }
-        const wdText = '周' + D.WEEKDAY_TEXT[Number(weekdaySel.value)];
-        const byMonth = new Map();
-        dates.forEach(iso => {
-          const key = iso.slice(0, 7);
-          if (!byMonth.has(key)) byMonth.set(key, []);
-          byMonth.get(key).push(Number(iso.slice(8, 10)) + '日');
-        });
-        const lines = [];
-        byMonth.forEach((days, key) => {
-          const y = Number(key.slice(0, 4));
-          const m = Number(key.slice(5, 7));
-          lines.push('<div>' + D.monthLabel(y, m) + ' 每周' + wdText + '：' + days.join('、') + '（' + days.length + '天）</div>');
-        });
-        lines.push('<div class="repeat-sum">合计 ' + dates.length + ' 条事件，保存后逐日生成</div>');
-        previewEl.innerHTML = lines.join('');
-        submitBtn.textContent = '添加事件（共 ' + dates.length + ' 条）';
-      }
-
-      monthGrid.addEventListener('click', e => {
-        const chip = e.target.closest('.month-chip');
-        if (!chip) return;
-        const key = monthKey(year, Number(chip.dataset.month));
-        if (selectedMonths.has(key)) {
-          selectedMonths.delete(key);
-        } else {
-          selectedMonths.add(key);
-        }
-        chip.classList.toggle('active');
-        renderPreview();
-      });
-      overlay.querySelector('[data-role="year-prev"]').addEventListener('click', () => {
-        year--;
-        renderMonthGrid();
-      });
-      overlay.querySelector('[data-role="year-next"]').addEventListener('click', () => {
-        year++;
-        renderMonthGrid();
-      });
-      weekdaySel.addEventListener('change', renderPreview);
-      repeatCheck.addEventListener('change', () => {
-        const on = repeatCheck.checked;
-        repeatBox.hidden = !on;
+    rule = global.WS.repeatrule.createRepeatRule(q('[data-role="repeat-root"]'), {
+      baseDate: baseDate,
+      weekday: isGroupEdit ? group.weekday : defaultWeekday,
+      months: isGroupEdit ? (group.months || []) : [],
+      checked: isGroupEdit,
+      onToggle: on => {
         singleDate.hidden = on;
         dateInput.disabled = on;
-        if (on) renderPreview();
+      }
+    });
+    if (rule.checked()) {
+      singleDate.hidden = true;
+      dateInput.disabled = true;
+    }
+
+    let scopeSel = null;
+    if (isGroupEdit) {
+      scopeSel = q('[data-role="edit-scope"]');
+      scopeSel.addEventListener('change', () => {
+        rule.setEnabled(scopeSel.value !== 'one');
       });
-      renderMonthGrid();
-      repeatApi = { repeatCheck, collectDates };
     }
 
     overlay.querySelector('form').addEventListener('submit', e => {
       e.preventDefault();
       const f = e.currentTarget;
-      const formData = new FormData(f);
-      const allDay = formData.get('allDay') === 'on';
-      const title = String(formData.get('title') || '').trim();
+      const allDay = f.allDay.checked;
+      const title = String(f.title.value || '').trim();
       if (!title) {
         global.WS.toast.showToast('事项标题不能为空', 'error');
         return;
       }
       const data = {
-        date: formData.get('date'),
+        date: dateInput ? dateInput.value : (isEdit ? event.date : date),
         allDay: allDay,
         title: title,
-        location: String(formData.get('location') || '').trim(),
-        owner: String(formData.get('owner') || '').trim(),
-        description: String(formData.get('description') || '').trim()
+        location: String(f.location.value || '').trim(),
+        owner: String(f.owner.value || '').trim(),
+        description: String(f.description.value || '').trim()
       };
       if (allDay) {
         data.startTime = '';
@@ -2879,8 +3141,8 @@ var Fr={},Gr={};var Wr,Hr=function(){function t(t,e,n){var i=this;this._sleepAft
         data.crossDay = false;
         data.endDate = undefined;
       } else {
-        data.startTime = String(formData.get('startTime') || '').trim();
-        data.endTime = String(formData.get('endTime') || '').trim();
+        data.startTime = String(f.startTime.value || '').trim();
+        data.endTime = String(f.endTime.value || '').trim();
         if (!data.startTime) {
           global.WS.toast.showToast('请填写开始时间，或勾选「全天事件」', 'error');
           return;
@@ -2888,23 +3150,24 @@ var Fr={},Gr={};var Wr,Hr=function(){function t(t,e,n){var i=this;this._sleepAft
         if (!data.endTime) {
           data.endTime = D.formatMinutes(D.parseTime(data.startTime) + (global.WS.app.store.state.settings.defaultDuration || 60));
         }
-        if (data.endTime < data.startTime) {
-          data.crossDay = true;
-          data.endDate = D.addDays(data.date, 1);
-        } else {
-          data.crossDay = false;
-          data.endDate = undefined;
-        }
+        data.crossDay = data.endTime < data.startTime;
+        data.endDate = data.crossDay ? D.addDays(data.date || baseDate, 1) : undefined;
       }
 
-      if (repeatApi && repeatApi.repeatCheck.checked) {
-        const dates = repeatApi.collectDates();
+      const scope = scopeSel ? scopeSel.value : (isGroupEdit ? 'group' : null);
+      if (rule && rule.checked() && (!isGroupEdit || scope === 'group')) {
+        const dates = rule.dates();
         if (!dates.length) {
           global.WS.toast.showToast('请至少选择一个月份', 'error');
           return;
         }
         data.date = dates[0];
         data.repeatDates = dates;
+        data.repeatWeekday = rule.weekday();
+        data.repeatMonths = rule.months();
+        if (isGroupEdit) data.repeatGroupId = group.id;
+      } else if (isGroupEdit && scope === 'one') {
+        data.repeatScope = 'one';
       }
 
       const doSave = () => {
@@ -2913,10 +3176,11 @@ var Fr={},Gr={};var Wr,Hr=function(){function t(t,e,n){var i=this;this._sleepAft
       };
       const count = Array.isArray(data.repeatDates) ? data.repeatDates.length : 0;
       if (count > 8) {
+        const fromText = isGroupEdit ? `将重复组更新为 ${count} 条` : `将同时添加 ${count} 条事件`;
         global.WS.toast.confirmDialog({
-          title: '确认批量添加',
-          message: `将同时添加 ${count} 条事件，从 ${D.formatTitle(data.repeatDates[0])} 开始逐日生成。是否继续？`,
-          confirmText: '添加',
+          title: isGroupEdit ? '确认整组更新' : '确认批量添加',
+          message: `${fromText}，从 ${D.formatTitle(data.repeatDates[0])} 开始逐日生成。是否继续？`,
+          confirmText: '确认',
           danger: false
         }).then(ok => {
           if (ok) doSave();
@@ -2944,7 +3208,9 @@ var Fr={},Gr={};var Wr,Hr=function(){function t(t,e,n){var i=this;this._sleepAft
 </script>
   <script>
 /**
- * 批注快速添加弹窗（悬浮按钮使用）。
+ * 批注添加 / 编辑弹窗。
+ * - 新增支持「按月重复」（星期几 + 多月 → 逐日生成）；
+ * - 编辑重复组时可整组修改内容 / 标签 / 优先级 / 星期 / 月份，或只改当天并解除重复。
  */
 (function (global) {
   'use strict';
@@ -2953,26 +3219,43 @@ var Fr={},Gr={};var Wr,Hr=function(){function t(t,e,n){var i=this;this._sleepAft
   const { showToast } = global.WS.toast;
 
   function openAnnoForm(opts) {
-    const { date, onSave } = opts;
+    const { date, annotation, onSave, group } = opts;
+    const initial = opts.initial || {};
+    const isEdit = !!annotation;
+    const isGroupEdit = isEdit && !!group;
+    const targetDate = isEdit ? annotation.date : date;
+    const contentSeed = isEdit ? annotation.content || '' : String(initial.content || '');
+    const tagsSeed = isEdit ? annotation.tags || '' : String(initial.tags || '');
+    const prioritySeed = isEdit ? annotation.priority || '' : String(initial.priority || '');
+
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
     overlay.innerHTML = `
       <div class="modal anno-modal" role="dialog" aria-modal="true">
-        <h3 class="modal-title">添加批注 · ${D.formatTitle(date)}</h3>
+        <h3 class="modal-title">${isGroupEdit ? '编辑重复批注' : isEdit ? '编辑批注' : '添加批注'} · ${D.formatTitle(targetDate)}</h3>
         <form class="anno-form">
-          <textarea name="content" rows="3" required maxlength="500" placeholder="记录今天的情况 / 临时补充…（必填）"></textarea>
+          <textarea name="content" rows="3" required maxlength="500" placeholder="记录今天的情况 / 临时补充…（必填）">${escHtml(contentSeed)}</textarea>
           <div class="anno-form-row">
-            <input type="text" name="tags" placeholder="标签，逗号分隔（可选）" maxlength="60">
+            <input type="text" name="tags" value="${escAttr(tagsSeed)}" placeholder="标签，逗号分隔（可选）" maxlength="60">
             <select name="priority">
               <option value="">优先级</option>
-              <option value="P0">P0</option>
-              <option value="P1">P1</option>
-              <option value="P2">P2</option>
+              <option value="P0"${prioritySeed === 'P0' ? ' selected' : ''}>P0</option>
+              <option value="P1"${prioritySeed === 'P1' ? ' selected' : ''}>P1</option>
+              <option value="P2"${prioritySeed === 'P2' ? ' selected' : ''}>P2</option>
             </select>
           </div>
+          ${isGroupEdit ? `
+          <label class="field">
+            <span>修改范围（重复组共 ${group.count} 条）</span>
+            <select data-role="edit-scope">
+              <option value="group">修改全部：内容 + 星期 + 月份</option>
+              <option value="one">仅修改这一条（解除重复）</option>
+            </select>
+          </label>` : ''}
+          <div data-role="repeat-root"></div>
           <div class="modal-actions">
             <button type="button" class="btn btn-ghost" data-act="cancel">取消</button>
-            <button type="submit" class="btn btn-primary">添加</button>
+            <button type="submit" class="btn btn-primary">${isEdit ? '保存修改' : '添加'}</button>
           </div>
         </form>
       </div>`;
@@ -2982,28 +3265,89 @@ var Fr={},Gr={};var Wr,Hr=function(){function t(t,e,n){var i=this;this._sleepAft
       if (e.target === overlay) close();
     });
     overlay.querySelector('[data-act="cancel"]').addEventListener('click', close);
+
+    const q = sel => overlay.querySelector(sel);
+    let rule = null;
+    const baseDate = targetDate || D.todayISO();
+    const seedRaw = D.weekdayFromDate(baseDate);
+    rule = global.WS.repeatrule.createRepeatRule(q('[data-role="repeat-root"]'), {
+      baseDate: baseDate,
+      weekday: isGroupEdit ? group.weekday : (seedRaw === null ? 0 : seedRaw),
+      months: isGroupEdit ? (group.months || []) : [],
+      checked: isGroupEdit || (!isEdit && opts.repeatChecked)
+    });
+
+    let scopeSel = null;
+    if (isGroupEdit) {
+      scopeSel = q('[data-role="edit-scope"]');
+      scopeSel.addEventListener('change', () => {
+        rule.setEnabled(scopeSel.value !== 'one');
+      });
+    }
+
     overlay.querySelector('form').addEventListener('submit', e => {
       e.preventDefault();
-      const content = String(e.currentTarget.content.value || '').trim();
+      const f = e.currentTarget;
+      const content = String(f.content.value || '').trim();
       if (!content) {
         showToast('批注内容不能为空', 'error');
         return;
       }
       const data = {
-        date,
-        content,
-        tags: String(e.currentTarget.tags.value || '').trim(),
-        priority: e.currentTarget.priority.value
+        date: targetDate,
+        content: content,
+        tags: String(f.tags.value || '').trim(),
+        priority: f.priority.value
       };
-      onSave(data);
-      close();
+      const scope = scopeSel ? scopeSel.value : (isGroupEdit ? 'group' : null);
+      if (rule && rule.checked() && (!isGroupEdit || scope === 'group')) {
+        const dates = rule.dates();
+        if (!dates.length) {
+          showToast('请至少选择一个月份', 'error');
+          return;
+        }
+        data.date = dates[0];
+        data.repeatDates = dates;
+        data.repeatWeekday = rule.weekday();
+        data.repeatMonths = rule.months();
+        if (isGroupEdit) data.repeatGroupId = group.id;
+      } else if (isGroupEdit && scope === 'one') {
+        data.repeatScope = 'one';
+      }
+
+      const doSave = () => {
+        onSave(data);
+        close();
+      };
+      const count = Array.isArray(data.repeatDates) ? data.repeatDates.length : 0;
+      if (count > 8) {
+        const fromText = isGroupEdit ? `将重复组更新为 ${count} 条` : `将同时添加 ${count} 条批注`;
+        global.WS.toast.confirmDialog({
+          title: isGroupEdit ? '确认整组更新' : '确认批量添加',
+          message: `${fromText}，从 ${D.formatTitle(data.repeatDates[0])} 开始逐日生成。是否继续？`,
+          confirmText: '确认',
+          danger: false
+        }).then(ok => {
+          if (ok) doSave();
+        });
+      } else {
+        doSave();
+      }
     });
     document.body.appendChild(overlay);
     overlay.querySelector('textarea').focus();
   }
 
+  function escAttr(s) {
+    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+  }
+
+  function escHtml(s) {
+    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
   global.WS = global.WS || {};
-  global.WS.annoform = { openAnnoForm };
+  global.WS.annoform = { openAnnoForm, escAttr, escHtml };
 })(window);
 
 </script>
@@ -3018,6 +3362,44 @@ var Fr={},Gr={};var Wr,Hr=function(){function t(t,e,n){var i=this;this._sleepAft
   const { showToast, confirmDialog } = global.WS.toast;
   const { openEventForm, escAttr, escHtml } = global.WS.eventform;
   const ST = global.WS.stats;
+
+  /** 事件/批注的重复组信息；只剩 1 条时按普通单条处理 */
+  function groupInfo(item, list) {
+    if (!item || !item.repeatGroupId) return null;
+    const same = list.filter(x => x.repeatGroupId === item.repeatGroupId);
+    if (same.length < 2) return null;
+    return {
+      id: item.repeatGroupId,
+      count: same.length,
+      weekday: item.repeatWeekday,
+      months: Array.isArray(item.repeatMonths) ? item.repeatMonths.slice() : []
+    };
+  }
+
+  function eventPatch(data) {
+    const p = { ...data };
+    delete p.date;
+    delete p.repeatDates;
+    delete p.repeatScope;
+    delete p.repeatGroupId;
+    return p;
+  }
+
+  function eventUpdatePatch(data) {
+    const p = { ...data };
+    delete p.repeatDates;
+    delete p.repeatScope;
+    return p;
+  }
+
+  function annotationPatch(data) {
+    const p = { ...data };
+    delete p.date;
+    delete p.repeatDates;
+    delete p.repeatScope;
+    delete p.repeatGroupId;
+    return p;
+  }
 
   /** 左滑删除：滑动露出删除按钮，点击后走既有确认删除流程 */
   function initSwipe(listEl) {
@@ -3107,6 +3489,10 @@ var Fr={},Gr={};var Wr,Hr=function(){function t(t,e,n){var i=this;this._sleepAft
                 <option value="P1">P1</option>
                 <option value="P2">P2</option>
               </select>
+              <label class="field-check anno-repeat-chk" title="按月重复添加（打开弹窗选择星期与月份）">
+                <input type="checkbox" name="repeat">
+                <span>按月重复</span>
+              </label>
               <button type="submit" class="btn btn-primary btn-sm">添加</button>
             </div>
           </form>
@@ -3147,13 +3533,31 @@ var Fr={},Gr={};var Wr,Hr=function(){function t(t,e,n){var i=this;this._sleepAft
       const ev = store.state.events.find(x => x.id === id);
       if (!ev) return;
       if (btn.dataset.act === 'edit-event') {
+        const group = groupInfo(ev, store.state.events);
         openEventForm({
           date,
           event: ev,
+          group,
           onSave: data => {
-            store.updateEvent(id, data);
-            showToast('事件已更新', 'success');
-            jumpToEventDate(data.date);
+            if (!group && Array.isArray(data.repeatDates)) {
+              const saved = store.addEvent(data);
+              store.deleteEvent(id);
+              showToast('已转为重复事件，共 ' + saved.length + ' 条', 'success');
+              jumpToEventDate(saved[0].date);
+            } else if (group && Array.isArray(data.repeatDates)) {
+              const res = store.syncEventGroup(group.id, eventPatch(data), data.repeatDates);
+              showToast(`重复组已更新为 ${res.total} 条（新增 ${res.added}，移除 ${res.removed}）`, 'success');
+              jumpToEventDate(data.date);
+            } else if (data.repeatScope === 'one' && group) {
+              store.updateEvent(id, eventUpdatePatch(data));
+              store.unlinkEvent(id);
+              showToast('已修改本条并解除重复关联', 'success');
+              jumpToEventDate(data.date);
+            } else {
+              store.updateEvent(id, eventUpdatePatch(data));
+              showToast('事件已更新', 'success');
+              jumpToEventDate(data.date);
+            }
           }
         });
       } else if (btn.dataset.act === 'del-event') {
@@ -3180,12 +3584,30 @@ var Fr={},Gr={};var Wr,Hr=function(){function t(t,e,n){var i=this;this._sleepAft
         showToast('批注内容不能为空', 'error');
         return;
       }
-      store.addAnnotation({
+      const base = {
         date,
         content,
         tags: String(f.tags.value || '').trim(),
         priority: f.priority.value
-      });
+      };
+      if (f.repeat && f.repeat.checked) {
+        global.WS.annoform.openAnnoForm({
+          date,
+          initial: base,
+          repeatChecked: true,
+          onSave: data => {
+            const saved = store.addAnnotation(data);
+            if (Array.isArray(saved)) {
+              showToast('已添加 ' + saved.length + ' 条批注', 'success');
+            } else {
+              showToast('批注已添加', 'success');
+            }
+            global.WS.app.refresh();
+          }
+        });
+        return;
+      }
+      store.addAnnotation(base);
       showToast('批注已添加', 'success');
       global.WS.app.refresh();
     });
@@ -3197,7 +3619,33 @@ var Fr={},Gr={};var Wr,Hr=function(){function t(t,e,n){var i=this;this._sleepAft
       const an = store.state.annotations.find(x => x.id === id);
       if (!an) return;
       if (btn.dataset.act === 'edit-anno') {
-        startEditAnnotation(container, an);
+        const group = groupInfo(an, store.state.annotations);
+        global.WS.annoform.openAnnoForm({
+          date: an.date,
+          annotation: an,
+          group,
+          onSave: data => {
+            if (!group && Array.isArray(data.repeatDates)) {
+              const saved = store.addAnnotation(data);
+              store.deleteAnnotation(an.id);
+              showToast('已转为重复批注，共 ' + saved.length + ' 条', 'success');
+              global.WS.app.refresh();
+            } else if (group && Array.isArray(data.repeatDates)) {
+              const res = store.syncAnnotationGroup(group.id, annotationPatch(data), data.repeatDates);
+              showToast(`重复组已更新为 ${res.total} 条（新增 ${res.added}，移除 ${res.removed}）`, 'success');
+              global.WS.app.refresh();
+            } else if (data.repeatScope === 'one') {
+              store.updateAnnotation(an.id, annotationPatch(data));
+              store.unlinkAnnotation(an.id);
+              showToast('已修改本条并解除重复关联', 'success');
+              global.WS.app.refresh();
+            } else {
+              store.updateAnnotation(an.id, annotationPatch(data));
+              showToast('批注已更新', 'success');
+              global.WS.app.refresh();
+            }
+          }
+        });
       } else if (btn.dataset.act === 'del-anno') {
         confirmDialog({
           title: '删除批注',
@@ -3272,46 +3720,6 @@ var Fr={},Gr={};var Wr,Hr=function(){function t(t,e,n){var i=this;this._sleepAft
           </div>
         </div>
       </div>`;
-  }
-
-  function startEditAnnotation(container, an) {
-    const item = container.querySelector(`.anno-item [data-id="${an.id}"]`).closest('.anno-item');
-    const form = document.createElement('form');
-    form.className = 'anno-form anno-edit';
-    form.innerHTML = `
-      <textarea name="content" rows="2" required maxlength="500">${escHtml(an.content)}</textarea>
-      <div class="anno-form-row">
-        <input type="text" name="tags" value="${escAttr(an.tags || '')}" placeholder="标签，逗号分隔">
-        <select name="priority">
-          <option value="">优先级</option>
-          <option value="P0" ${an.priority === 'P0' ? 'selected' : ''}>P0</option>
-          <option value="P1" ${an.priority === 'P1' ? 'selected' : ''}>P1</option>
-          <option value="P2" ${an.priority === 'P2' ? 'selected' : ''}>P2</option>
-        </select>
-        <button type="submit" class="btn btn-primary btn-sm">保存</button>
-        <button type="button" class="btn btn-ghost btn-sm" data-act="cancel-edit">取消</button>
-      </div>`;
-    item.replaceWith(form);
-    form.querySelector('[data-act="cancel-edit"]').addEventListener('click', () => {
-      global.WS.app.refresh();
-    });
-    form.addEventListener('submit', e => {
-      e.preventDefault();
-      const content = String(form.content.value || '').trim();
-      if (!content) {
-        showToast('批注内容不能为空', 'error');
-        return;
-      }
-      global.WS.app.store.updateAnnotation(an.id, {
-        content,
-        tags: String(form.tags.value || '').trim(),
-        priority: form.priority.value
-      });
-      showToast('批注已更新', 'success');
-      global.WS.app.refresh();
-    });
-    form.content.focus();
-    form.content.setSelectionRange(form.content.value.length, form.content.value.length);
   }
 
   global.WS = global.WS || {};
@@ -4826,11 +5234,20 @@ var Fr={},Gr={};var Wr,Hr=function(){function t(t,e,n){var i=this;this._sleepAft
     global.WS.annoform.openAnnoForm({
       date: fabDate(),
       onSave: data => {
-        storeApi.addAnnotation(data);
-        global.WS.toast.showToast('批注已添加', 'success');
-        if (data.date !== app.state.selected) {
-          app.state.selected = data.date;
-          app.state.anchor = data.date;
+        const saved = storeApi.addAnnotation(data);
+        if (Array.isArray(saved)) {
+          global.WS.toast.showToast('已添加 ' + saved.length + ' 条批注', 'success');
+          const firstDate = saved[0].date;
+          if (firstDate !== app.state.selected) {
+            app.state.selected = firstDate;
+            app.state.anchor = firstDate;
+          }
+        } else {
+          global.WS.toast.showToast('批注已添加', 'success');
+          if (saved.date !== app.state.selected) {
+            app.state.selected = saved.date;
+            app.state.anchor = saved.date;
+          }
         }
         app.refresh();
       }

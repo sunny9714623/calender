@@ -9,6 +9,44 @@
   const { openEventForm, escAttr, escHtml } = global.WS.eventform;
   const ST = global.WS.stats;
 
+  /** 事件/批注的重复组信息；只剩 1 条时按普通单条处理 */
+  function groupInfo(item, list) {
+    if (!item || !item.repeatGroupId) return null;
+    const same = list.filter(x => x.repeatGroupId === item.repeatGroupId);
+    if (same.length < 2) return null;
+    return {
+      id: item.repeatGroupId,
+      count: same.length,
+      weekday: item.repeatWeekday,
+      months: Array.isArray(item.repeatMonths) ? item.repeatMonths.slice() : []
+    };
+  }
+
+  function eventPatch(data) {
+    const p = { ...data };
+    delete p.date;
+    delete p.repeatDates;
+    delete p.repeatScope;
+    delete p.repeatGroupId;
+    return p;
+  }
+
+  function eventUpdatePatch(data) {
+    const p = { ...data };
+    delete p.repeatDates;
+    delete p.repeatScope;
+    return p;
+  }
+
+  function annotationPatch(data) {
+    const p = { ...data };
+    delete p.date;
+    delete p.repeatDates;
+    delete p.repeatScope;
+    delete p.repeatGroupId;
+    return p;
+  }
+
   /** 左滑删除：滑动露出删除按钮，点击后走既有确认删除流程 */
   function initSwipe(listEl) {
     if (!listEl) return;
@@ -97,6 +135,10 @@
                 <option value="P1">P1</option>
                 <option value="P2">P2</option>
               </select>
+              <label class="field-check anno-repeat-chk" title="按月重复添加（打开弹窗选择星期与月份）">
+                <input type="checkbox" name="repeat">
+                <span>按月重复</span>
+              </label>
               <button type="submit" class="btn btn-primary btn-sm">添加</button>
             </div>
           </form>
@@ -137,13 +179,31 @@
       const ev = store.state.events.find(x => x.id === id);
       if (!ev) return;
       if (btn.dataset.act === 'edit-event') {
+        const group = groupInfo(ev, store.state.events);
         openEventForm({
           date,
           event: ev,
+          group,
           onSave: data => {
-            store.updateEvent(id, data);
-            showToast('事件已更新', 'success');
-            jumpToEventDate(data.date);
+            if (!group && Array.isArray(data.repeatDates)) {
+              const saved = store.addEvent(data);
+              store.deleteEvent(id);
+              showToast('已转为重复事件，共 ' + saved.length + ' 条', 'success');
+              jumpToEventDate(saved[0].date);
+            } else if (group && Array.isArray(data.repeatDates)) {
+              const res = store.syncEventGroup(group.id, eventPatch(data), data.repeatDates);
+              showToast(`重复组已更新为 ${res.total} 条（新增 ${res.added}，移除 ${res.removed}）`, 'success');
+              jumpToEventDate(data.date);
+            } else if (data.repeatScope === 'one' && group) {
+              store.updateEvent(id, eventUpdatePatch(data));
+              store.unlinkEvent(id);
+              showToast('已修改本条并解除重复关联', 'success');
+              jumpToEventDate(data.date);
+            } else {
+              store.updateEvent(id, eventUpdatePatch(data));
+              showToast('事件已更新', 'success');
+              jumpToEventDate(data.date);
+            }
           }
         });
       } else if (btn.dataset.act === 'del-event') {
@@ -170,12 +230,30 @@
         showToast('批注内容不能为空', 'error');
         return;
       }
-      store.addAnnotation({
+      const base = {
         date,
         content,
         tags: String(f.tags.value || '').trim(),
         priority: f.priority.value
-      });
+      };
+      if (f.repeat && f.repeat.checked) {
+        global.WS.annoform.openAnnoForm({
+          date,
+          initial: base,
+          repeatChecked: true,
+          onSave: data => {
+            const saved = store.addAnnotation(data);
+            if (Array.isArray(saved)) {
+              showToast('已添加 ' + saved.length + ' 条批注', 'success');
+            } else {
+              showToast('批注已添加', 'success');
+            }
+            global.WS.app.refresh();
+          }
+        });
+        return;
+      }
+      store.addAnnotation(base);
       showToast('批注已添加', 'success');
       global.WS.app.refresh();
     });
@@ -187,7 +265,33 @@
       const an = store.state.annotations.find(x => x.id === id);
       if (!an) return;
       if (btn.dataset.act === 'edit-anno') {
-        startEditAnnotation(container, an);
+        const group = groupInfo(an, store.state.annotations);
+        global.WS.annoform.openAnnoForm({
+          date: an.date,
+          annotation: an,
+          group,
+          onSave: data => {
+            if (!group && Array.isArray(data.repeatDates)) {
+              const saved = store.addAnnotation(data);
+              store.deleteAnnotation(an.id);
+              showToast('已转为重复批注，共 ' + saved.length + ' 条', 'success');
+              global.WS.app.refresh();
+            } else if (group && Array.isArray(data.repeatDates)) {
+              const res = store.syncAnnotationGroup(group.id, annotationPatch(data), data.repeatDates);
+              showToast(`重复组已更新为 ${res.total} 条（新增 ${res.added}，移除 ${res.removed}）`, 'success');
+              global.WS.app.refresh();
+            } else if (data.repeatScope === 'one') {
+              store.updateAnnotation(an.id, annotationPatch(data));
+              store.unlinkAnnotation(an.id);
+              showToast('已修改本条并解除重复关联', 'success');
+              global.WS.app.refresh();
+            } else {
+              store.updateAnnotation(an.id, annotationPatch(data));
+              showToast('批注已更新', 'success');
+              global.WS.app.refresh();
+            }
+          }
+        });
       } else if (btn.dataset.act === 'del-anno') {
         confirmDialog({
           title: '删除批注',
@@ -262,46 +366,6 @@
           </div>
         </div>
       </div>`;
-  }
-
-  function startEditAnnotation(container, an) {
-    const item = container.querySelector(`.anno-item [data-id="${an.id}"]`).closest('.anno-item');
-    const form = document.createElement('form');
-    form.className = 'anno-form anno-edit';
-    form.innerHTML = `
-      <textarea name="content" rows="2" required maxlength="500">${escHtml(an.content)}</textarea>
-      <div class="anno-form-row">
-        <input type="text" name="tags" value="${escAttr(an.tags || '')}" placeholder="标签，逗号分隔">
-        <select name="priority">
-          <option value="">优先级</option>
-          <option value="P0" ${an.priority === 'P0' ? 'selected' : ''}>P0</option>
-          <option value="P1" ${an.priority === 'P1' ? 'selected' : ''}>P1</option>
-          <option value="P2" ${an.priority === 'P2' ? 'selected' : ''}>P2</option>
-        </select>
-        <button type="submit" class="btn btn-primary btn-sm">保存</button>
-        <button type="button" class="btn btn-ghost btn-sm" data-act="cancel-edit">取消</button>
-      </div>`;
-    item.replaceWith(form);
-    form.querySelector('[data-act="cancel-edit"]').addEventListener('click', () => {
-      global.WS.app.refresh();
-    });
-    form.addEventListener('submit', e => {
-      e.preventDefault();
-      const content = String(form.content.value || '').trim();
-      if (!content) {
-        showToast('批注内容不能为空', 'error');
-        return;
-      }
-      global.WS.app.store.updateAnnotation(an.id, {
-        content,
-        tags: String(form.tags.value || '').trim(),
-        priority: form.priority.value
-      });
-      showToast('批注已更新', 'success');
-      global.WS.app.refresh();
-    });
-    form.content.focus();
-    form.content.setSelectionRange(form.content.value.length, form.content.value.length);
   }
 
   global.WS = global.WS || {};

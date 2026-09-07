@@ -590,8 +590,15 @@ textarea { resize: vertical; }
 /* ---------- 批注 ---------- */
 .anno-form { margin-bottom: 12px; display: flex; flex-direction: column; gap: 7px; }
 .anno-form textarea { width: 100%; }
-.anno-form-row { display: flex; gap: 6px; }
+.anno-form-row { display: flex; gap: 6px; flex-wrap: wrap; }
 .anno-form-row input { flex: 1; min-width: 0; }
+.anno-repeat-chk {
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: var(--accent-ink);
+  white-space: nowrap;
+}
+.anno-repeat-chk input { flex: 0 0 auto; }
 .anno-list { display: flex; flex-direction: column; gap: 8px; }
 .anno-item {
   position: relative;

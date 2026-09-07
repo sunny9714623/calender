@@ -1,5 +1,5 @@
 /* 周行事例批注台 · Service Worker：离线缓存，安装后可在无网络时使用 */
-const CACHE = 'wsd-v14';
+const CACHE = 'wsd-v15';
 const ASSETS = [
   './index.html',
   './css/style.css',
@@ -11,6 +11,7 @@ const ASSETS = [
   './js/core/store.js',
   './js/core/filereader.js',
   './js/ui/toast.js',
+  './js/ui/repeatrule.js',
   './js/ui/eventform.js',
   './js/ui/daypanel.js',
   './js/ui/calendar.js',

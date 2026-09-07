@@ -84,6 +84,7 @@
   <script src="../js/core/store.js"></script>
   <script src="../js/core/filereader.js"></script>
   <script src="../js/ui/toast.js"></script>
+  <script src="../js/ui/repeatrule.js"></script>
   <script src="../js/ui/eventform.js"></script>
   <script src="../js/ui/annoform.js"></script>
   <script src="../js/ui/daypanel.js"></script>
@@ -425,9 +426,96 @@
         log(!!repPreview && repPreview.textContent.includes('合计 8 条'), '多选 9/10 月预览每周一共 8 条（' + (repPreview ? repPreview.textContent : '无') + '）');
         repModal.querySelector('button[type="submit"]').click();
         await new Promise(r => setTimeout(r, 250));
-        const repeatEvents = store.state.events.filter(e => e.title === '重复班会');
+        let repeatEvents = store.state.events.filter(e => e.title === '重复班会');
         log(repeatEvents.length === 8 && repeatEvents.every(e => ['2026-09-07', '2026-09-14', '2026-09-21', '2026-09-28', '2026-10-05', '2026-10-12', '2026-10-19', '2026-10-26'].includes(e.date)), '多月重复生成 9/10 月每周一 8 条（实际 ' + repeatEvents.length + '）');
+
+        // 整组修改重复事件：改内容 + 去掉 10 月
+        const repEditItem = Array.from(document.querySelectorAll('#dayPanel .event-item')).find(x => x.textContent.includes('重复班会'));
+        if (repEditItem) {
+          repEditItem.querySelector('[data-act="edit-event"]').click();
+          await new Promise(r => setTimeout(r, 120));
+          const groupModal = document.querySelector('.event-modal');
+          const groupScope = groupModal.querySelector('[data-role="edit-scope"]');
+          log(!!groupScope && groupScope.value === 'group', '重复事件编辑提供整组修改范围');
+          groupModal.querySelector('[name="title"]').value = '重复班会改';
+          groupModal.querySelector('.month-pick [data-month="10"]').click();
+          await new Promise(r => setTimeout(r, 80));
+          const groupPreview = groupModal.querySelector('[data-role="repeat-preview"]');
+          log(!!groupPreview && groupPreview.textContent.includes('合计 4 条'), '整组编辑预览收缩到 9 月 4 条');
+          groupModal.querySelector('button[type="submit"]').click();
+          await new Promise(r => setTimeout(r, 250));
+          repeatEvents = store.state.events.filter(e => e.title === '重复班会改');
+          log(repeatEvents.length === 4 && repeatEvents.every(e => e.date.startsWith('2026-09')), '整组修改同步内容并移除 10 月日期（实际 ' + repeatEvents.length + '）');
+        }
         repeatEvents.forEach(e => store.deleteEvent(e.id));
+        app.refresh();
+
+        // 单条事件编辑时可直接勾选重复，转为按月重复组
+        document.getElementById('btnFabEvent').click();
+        await new Promise(r => setTimeout(r, 100));
+        const singleModal = document.querySelector('.event-modal');
+        singleModal.querySelector('[name="title"]').value = '单转重复';
+        singleModal.querySelector('[name="startTime"]').value = '10:00';
+        singleModal.querySelector('button[type="submit"]').click();
+        await new Promise(r => setTimeout(r, 200));
+        const singleItem = Array.from(document.querySelectorAll('#dayPanel .event-item')).find(x => x.textContent.includes('单转重复'));
+        log(!!singleItem, '单条事件已添加待编辑');
+        if (singleItem) {
+          singleItem.querySelector('[data-act="edit-event"]').click();
+          await new Promise(r => setTimeout(r, 120));
+          const convertModal = document.querySelector('.event-modal');
+          convertModal.querySelector('[data-role="repeat-check"]').click();
+          await new Promise(r => setTimeout(r, 60));
+          const convWeekday = convertModal.querySelector('[data-role="repeat-weekday"]');
+          convWeekday.value = '0';
+          convWeekday.dispatchEvent(new Event('change'));
+          convertModal.querySelector('.month-pick [data-month="9"]').click();
+          await new Promise(r => setTimeout(r, 60));
+          convertModal.querySelector('button[type="submit"]').click();
+          await new Promise(r => setTimeout(r, 250));
+          const converted = store.state.events.filter(e => e.title === '单转重复');
+          log(converted.length === 4 && converted.every(e => ['2026-09-07', '2026-09-14', '2026-09-21', '2026-09-28'].includes(e.date)), '单条事件编辑勾选重复后转为 9 月每周一 4 条（实际 ' + converted.length + '）');
+          converted.forEach(e => store.deleteEvent(e.id));
+          app.refresh();
+        }
+
+        // 新增批注：按月重复，与事件同样逐日生成
+        document.getElementById('btnFabAnno').click();
+        await new Promise(r => setTimeout(r, 100));
+        const annRepModal = document.querySelector('.anno-modal');
+        annRepModal.querySelector('[name="content"]').value = '重复批注';
+        annRepModal.querySelector('[data-role="repeat-check"]').click();
+        await new Promise(r => setTimeout(r, 60));
+        const annWeekday = annRepModal.querySelector('[data-role="repeat-weekday"]');
+        annWeekday.value = '0';
+        annWeekday.dispatchEvent(new Event('change'));
+        annRepModal.querySelector('.month-pick [data-month="9"]').click();
+        annRepModal.querySelector('.month-pick [data-month="10"]').click();
+        await new Promise(r => setTimeout(r, 60));
+        const annRepPreview = annRepModal.querySelector('[data-role="repeat-preview"]');
+        log(!!annRepPreview && annRepPreview.textContent.includes('合计 8 条'), '批注多选 9/10 月预览 8 条（' + (annRepPreview ? annRepPreview.textContent : '无') + '）');
+        annRepModal.querySelector('button[type="submit"]').click();
+        await new Promise(r => setTimeout(r, 250));
+        let repeatAnnos = store.state.annotations.filter(a => a.content === '重复批注');
+        log(repeatAnnos.length === 8 && repeatAnnos.every(a => ['2026-09-07', '2026-09-14', '2026-09-21', '2026-09-28', '2026-10-05', '2026-10-12', '2026-10-19', '2026-10-26'].includes(a.date)), '批注按月重复生成 9/10 月每周一 8 条（实际 ' + repeatAnnos.length + '）');
+
+        // 整组修改重复批注：改内容 + 去掉 10 月
+        const annRepItem = Array.from(document.querySelectorAll('#dayPanel .anno-item')).find(x => x.textContent.includes('重复批注'));
+        if (annRepItem) {
+          annRepItem.querySelector('[data-act="edit-anno"]').click();
+          await new Promise(r => setTimeout(r, 120));
+          const annGroupModal = document.querySelector('.anno-modal');
+          const annScope = annGroupModal.querySelector('[data-role="edit-scope"]');
+          log(!!annScope && annScope.value === 'group', '重复批注编辑提供整组修改范围');
+          annGroupModal.querySelector('[name="content"]').value = '重复批注改';
+          annGroupModal.querySelector('.month-pick [data-month="10"]').click();
+          await new Promise(r => setTimeout(r, 80));
+          annGroupModal.querySelector('button[type="submit"]').click();
+          await new Promise(r => setTimeout(r, 250));
+          repeatAnnos = store.state.annotations.filter(a => a.content === '重复批注改');
+          log(repeatAnnos.length === 4 && repeatAnnos.every(a => a.date.startsWith('2026-09')), '整组批注同步内容并移除 10 月日期（实际 ' + repeatAnnos.length + '）');
+        }
+        repeatAnnos.forEach(a => store.deleteAnnotation(a.id));
         app.refresh();
 
         // 左滑删除批注 + 二次确认
