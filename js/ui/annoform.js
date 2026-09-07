@@ -25,6 +25,11 @@
       <div class="modal anno-modal" role="dialog" aria-modal="true">
         <h3 class="modal-title">${isGroupEdit ? '编辑重复批注' : isEdit ? '编辑批注' : '添加批注'} · ${D.formatTitle(targetDate)}</h3>
         <form class="anno-form">
+          ${isEdit && !isGroupEdit ? `
+          <label class="field">
+            <span>日期 *</span>
+            <input type="date" name="date" required value="${annotation.date}">
+          </label>` : ''}
           <textarea name="content" rows="3" required maxlength="500" placeholder="记录今天的情况 / 临时补充…（必填）">${escHtml(contentSeed)}</textarea>
           <div class="anno-form-row">
             <input type="text" name="tags" value="${escAttr(tagsSeed)}" placeholder="标签，逗号分隔（可选）" maxlength="60">
@@ -85,7 +90,7 @@
         return;
       }
       const data = {
-        date: targetDate,
+        date: isEdit && !isGroupEdit && f.date ? f.date.value : targetDate,
         content: content,
         tags: String(f.tags.value || '').trim(),
         priority: f.priority.value

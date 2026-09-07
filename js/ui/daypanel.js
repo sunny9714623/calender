@@ -47,6 +47,13 @@
     return p;
   }
 
+  function annotationUpdatePatch(data) {
+    const p = { ...data };
+    delete p.repeatDates;
+    delete p.repeatScope;
+    return p;
+  }
+
   /** 左滑删除：滑动露出删除按钮，点击后走既有确认删除流程 */
   function initSwipe(listEl) {
     if (!listEl) return;
@@ -174,7 +181,12 @@
 
     container.querySelector('.event-list').addEventListener('click', e => {
       const btn = e.target.closest('[data-act]');
-      if (!btn) return;
+      if (!btn) {
+        const item = e.target.closest('.event-item');
+        const editBtn = item && item.querySelector('[data-act="edit-event"]');
+        if (editBtn) editBtn.click();
+        return;
+      }
       const id = btn.dataset.id;
       const ev = store.state.events.find(x => x.id === id);
       if (!ev) return;
@@ -260,7 +272,12 @@
 
     container.querySelector('.anno-list').addEventListener('click', e => {
       const btn = e.target.closest('[data-act]');
-      if (!btn) return;
+      if (!btn) {
+        const item = e.target.closest('.anno-item');
+        const editBtn = item && item.querySelector('[data-act="edit-anno"]');
+        if (editBtn) editBtn.click();
+        return;
+      }
       const id = btn.dataset.id;
       const an = store.state.annotations.find(x => x.id === id);
       if (!an) return;
@@ -286,7 +303,7 @@
               showToast('已修改本条并解除重复关联', 'success');
               global.WS.app.refresh();
             } else {
-              store.updateAnnotation(an.id, annotationPatch(data));
+              store.updateAnnotation(an.id, annotationUpdatePatch(data));
               showToast('批注已更新', 'success');
               global.WS.app.refresh();
             }

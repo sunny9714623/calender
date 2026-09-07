@@ -589,6 +589,7 @@ textarea { resize: vertical; }
   padding: 8px 10px;
   background: var(--surface);
 }
+.event-item { cursor: pointer; }
 .event-item.is-allday { border-left-color: var(--mark); }
 .event-main { flex: 1; min-width: 0; }
 .event-time { font-size: 12px; color: var(--accent-ink); font-weight: 600; }
@@ -615,8 +616,9 @@ textarea { resize: vertical; }
   position: relative;
   border: 1px solid var(--line);
   border-radius: 8px;
-  padding: 8px 10px 8px 34px;
+  padding: 8px 70px 8px 34px;
   background: var(--surface);
+  cursor: pointer;
 }
 .anno-item::before {
   content: '';
@@ -631,8 +633,7 @@ textarea { resize: vertical; }
 .anno-content { font-size: 13.5px; word-break: break-word; margin-bottom: 5px; }
 .anno-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 11.5px; }
 .anno-time { color: var(--muted); margin-left: auto; }
-.anno-actions { position: absolute; right: 8px; top: 8px; display: flex; gap: 3px; opacity: 0; transition: opacity .15s; }
-.anno-item:hover .anno-actions { opacity: 1; }
+.anno-actions { position: absolute; right: 8px; top: 8px; display: flex; gap: 3px; opacity: 1; }
 .anno-edit { border: 1px dashed var(--accent); padding: 8px; border-radius: 8px; }
 .tag {
   display: inline-block;
@@ -3234,6 +3235,11 @@ var Fr={},Gr={};var Wr,Hr=function(){function t(t,e,n){var i=this;this._sleepAft
       <div class="modal anno-modal" role="dialog" aria-modal="true">
         <h3 class="modal-title">${isGroupEdit ? '编辑重复批注' : isEdit ? '编辑批注' : '添加批注'} · ${D.formatTitle(targetDate)}</h3>
         <form class="anno-form">
+          ${isEdit && !isGroupEdit ? `
+          <label class="field">
+            <span>日期 *</span>
+            <input type="date" name="date" required value="${annotation.date}">
+          </label>` : ''}
           <textarea name="content" rows="3" required maxlength="500" placeholder="记录今天的情况 / 临时补充…（必填）">${escHtml(contentSeed)}</textarea>
           <div class="anno-form-row">
             <input type="text" name="tags" value="${escAttr(tagsSeed)}" placeholder="标签，逗号分隔（可选）" maxlength="60">
@@ -3294,7 +3300,7 @@ var Fr={},Gr={};var Wr,Hr=function(){function t(t,e,n){var i=this;this._sleepAft
         return;
       }
       const data = {
-        date: targetDate,
+        date: isEdit && !isGroupEdit && f.date ? f.date.value : targetDate,
         content: content,
         tags: String(f.tags.value || '').trim(),
         priority: f.priority.value
@@ -3398,6 +3404,13 @@ var Fr={},Gr={};var Wr,Hr=function(){function t(t,e,n){var i=this;this._sleepAft
     delete p.repeatDates;
     delete p.repeatScope;
     delete p.repeatGroupId;
+    return p;
+  }
+
+  function annotationUpdatePatch(data) {
+    const p = { ...data };
+    delete p.repeatDates;
+    delete p.repeatScope;
     return p;
   }
 
@@ -3528,7 +3541,12 @@ var Fr={},Gr={};var Wr,Hr=function(){function t(t,e,n){var i=this;this._sleepAft
 
     container.querySelector('.event-list').addEventListener('click', e => {
       const btn = e.target.closest('[data-act]');
-      if (!btn) return;
+      if (!btn) {
+        const item = e.target.closest('.event-item');
+        const editBtn = item && item.querySelector('[data-act="edit-event"]');
+        if (editBtn) editBtn.click();
+        return;
+      }
       const id = btn.dataset.id;
       const ev = store.state.events.find(x => x.id === id);
       if (!ev) return;
@@ -3614,7 +3632,12 @@ var Fr={},Gr={};var Wr,Hr=function(){function t(t,e,n){var i=this;this._sleepAft
 
     container.querySelector('.anno-list').addEventListener('click', e => {
       const btn = e.target.closest('[data-act]');
-      if (!btn) return;
+      if (!btn) {
+        const item = e.target.closest('.anno-item');
+        const editBtn = item && item.querySelector('[data-act="edit-anno"]');
+        if (editBtn) editBtn.click();
+        return;
+      }
       const id = btn.dataset.id;
       const an = store.state.annotations.find(x => x.id === id);
       if (!an) return;
@@ -3640,7 +3663,7 @@ var Fr={},Gr={};var Wr,Hr=function(){function t(t,e,n){var i=this;this._sleepAft
               showToast('已修改本条并解除重复关联', 'success');
               global.WS.app.refresh();
             } else {
-              store.updateAnnotation(an.id, annotationPatch(data));
+              store.updateAnnotation(an.id, annotationUpdatePatch(data));
               showToast('批注已更新', 'success');
               global.WS.app.refresh();
             }

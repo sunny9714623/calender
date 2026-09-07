@@ -432,7 +432,7 @@
         // 整组修改重复事件：改内容 + 去掉 10 月
         const repEditItem = Array.from(document.querySelectorAll('#dayPanel .event-item')).find(x => x.textContent.includes('重复班会'));
         if (repEditItem) {
-          repEditItem.querySelector('[data-act="edit-event"]').click();
+          repEditItem.click();
           await new Promise(r => setTimeout(r, 120));
           const groupModal = document.querySelector('.event-modal');
           const groupScope = groupModal.querySelector('[data-role="edit-scope"]');
@@ -514,6 +514,16 @@
           await new Promise(r => setTimeout(r, 250));
           repeatAnnos = store.state.annotations.filter(a => a.content === '重复批注改');
           log(repeatAnnos.length === 4 && repeatAnnos.every(a => a.date.startsWith('2026-09')), '整组批注同步内容并移除 10 月日期（实际 ' + repeatAnnos.length + '）');
+        }
+        const visibleAnnoActions = document.querySelector('#dayPanel .anno-actions');
+        log(!!visibleAnnoActions && getComputedStyle(visibleAnnoActions).opacity !== '0', '批注编辑/删除按钮始终可见');
+        const annoTapItem = Array.from(document.querySelectorAll('#dayPanel .anno-item')).find(x => x.textContent.includes('重复批注改'));
+        if (annoTapItem) {
+          annoTapItem.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+          await new Promise(r => setTimeout(r, 120));
+          log(!!document.querySelector('.anno-modal'), '点击批注条目直接打开编辑');
+          const tapCancel = document.querySelector('.anno-modal [data-act="cancel"]');
+          if (tapCancel) tapCancel.click();
         }
         repeatAnnos.forEach(a => store.deleteAnnotation(a.id));
         app.refresh();
